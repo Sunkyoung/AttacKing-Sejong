@@ -4,10 +4,9 @@
 # @Email   : linyangli19@fudan.edu.cn
 # @File    : attack.py
 
-
 import warnings
 import os
-
+import argparse
 import torch
 import torch.nn as nn
 import json
@@ -15,8 +14,10 @@ from torch.utils.data import DataLoader, SequentialSampler, TensorDataset
 from transformers import BertConfig, BertTokenizer
 from transformers import BertForSequenceClassification, BertForMaskedLM
 import copy
-import argparse
+# import easydict
 import numpy as np
+from timeit import default_timer as timer
+from datetime import timedelta
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -75,7 +76,9 @@ def get_data_cls(data_path):
         features.append([seq, label])
     return features
 
-
+"""
+Object of text, attack, result
+"""
 class Feature(object):
     def __init__(self, seq_a, label):
         self.label = label
@@ -103,7 +106,12 @@ def _tokenize(seq, tokenizer):
 
     return words, sub_words, keys
 
+"""
+parameter : words : list[str]
+return :  list of word list which one of word is masked one by one except last token.
 
+example : "This is good" -> [['[UNK]', 'is', 'good'], ['This', '[UNK]', 'good']]
+"""
 def _get_masked(words):
     len_text = len(words)
     masked_words = []
@@ -112,6 +120,16 @@ def _get_masked(words):
     # list of words
     return masked_words
 
+"""
+Get important scores of words in texts.
+Important score is difference between original logit output and masked logit output of orig_label
+ + (additional score which In case the results change) difference between original logit output and masked logit output of label different from original.
+parameter
+orig prob : logit output of original sentence :Tensor(float)
+orig_probs : Tensor([value of orig prob, 1- value of orig prob])
+
+return : list of important score 
+"""
 
 def get_important_scores(words, tgt_model, orig_prob, orig_label, orig_probs, tokenizer, batch_size, max_length):
     masked_words = _get_masked(words)
@@ -119,6 +137,7 @@ def get_important_scores(words, tgt_model, orig_prob, orig_label, orig_probs, to
     all_input_ids = []
     all_masks = []
     all_segs = []
+    # Put 0 padding to input for all texts
     for text in texts:
         inputs = tokenizer.encode_plus(text, None, add_special_tokens=True, max_length=max_length, )
         input_ids, token_type_ids = inputs["input_ids"], inputs["token_type_ids"]
@@ -150,38 +169,46 @@ def get_important_scores(words, tgt_model, orig_prob, orig_label, orig_probs, to
     leave_1_probs = torch.softmax(leave_1_probs, -1)  #
     leave_1_probs_argmax = torch.argmax(leave_1_probs, dim=-1)
     import_scores = (orig_prob
-                     - leave_1_probs[:, orig_label]
-                     +
+                     - leave_1_probs[:, orig_label] #Difference between original logit output and 1 masked logit output
+                     + # Add score which In case the results change.
                      (leave_1_probs_argmax != orig_label).float()
                      * (leave_1_probs.max(dim=-1)[0] - torch.index_select(orig_probs, 0, leave_1_probs_argmax))
                      ).data.cpu().numpy()
 
     return import_scores
 
+"""
+Find possible substitues
 
+Return : list of word
+"""
 def get_substitues(substitutes, tokenizer, mlm_model, use_bpe, substitutes_score=None, threshold=3.0):
     # substitues L,k
     # from this matrix to recover a word
     words = []
-    sub_len, k = substitutes.size()  # sub-len, k
+    sub_len, k = substitutes.size() #sub_len : # of subwords
 
+    # Empty list (no substitution)
     if sub_len == 0:
         return words
-        
+    # Single word, choose word which score of substitutes is higher than threshold
     elif sub_len == 1:
         for (i,j) in zip(substitutes[0], substitutes_score[0]):
             if threshold != 0 and j < threshold:
                 break
             words.append(tokenizer._convert_id_to_token(int(i)))
+    # composed of more than 2 subword
     else:
         if use_bpe == 1:
             words = get_bpe_substitues(substitutes, tokenizer, mlm_model)
         else:
             return words
-    #
-    # print(words)
+
     return words
 
+"""
+return substitutes using byte pair encoding
+"""
 
 def get_bpe_substitues(substitutes, tokenizer, mlm_model):
     # substitutes L, k
@@ -221,7 +248,16 @@ def get_bpe_substitues(substitutes, tokenizer, mlm_model):
         text = tokenizer.convert_tokens_to_string(tokens)
         final_words.append(text)
     return final_words
+"""
+Attack model by replace target words to substitues
 
+feature.success = 1 : exceed ratio of word change
+feature.success = 2 : Fail to attack
+feature.success = 3 : Origin prediction Fail
+feature.success = 4 : attack success with  substitutes
+
+return : feature that succeeded in attack 
+"""
 
 def attack(feature, tgt_model, mlm_model, tokenizer, k, batch_size, max_length=512, cos_mat=None, w2i={}, i2w={}, use_bpe=1, threshold_pred_score=0.3):
     # MLM-process
@@ -246,20 +282,24 @@ def attack(feature, tgt_model, mlm_model, tokenizer, k, batch_size, max_length=5
 
     sub_words = ['[CLS]'] + sub_words[:max_length - 2] + ['[SEP]']
     input_ids_ = torch.tensor([tokenizer.convert_tokens_to_ids(sub_words)])
-    word_predictions = mlm_model(input_ids_.to('cuda'))[0].squeeze()  # seq-len(sub) vocab
-    word_pred_scores_all, word_predictions = torch.topk(word_predictions, k, -1)  # seq-len k
+    word_predictions = mlm_model(input_ids_.to('cuda'))[0].squeeze()  # seq-len(sub) vocab.  
+    word_pred_scores_all, word_predictions = torch.topk(word_predictions, k, -1)  # seq-len k  #top k prediction 
 
     word_predictions = word_predictions[1:len(sub_words) + 1, :]
     word_pred_scores_all = word_pred_scores_all[1:len(sub_words) + 1, :]
 
-    important_scores = get_important_scores(words, tgt_model, current_prob, orig_label, orig_probs,
+    important_scores = get_important_scores(words, tgt_model, current_prob, orig_label, orig_probs,  #get important score 
                                             tokenizer, batch_size, max_length)
     feature.query += int(len(words))
-    list_of_index = sorted(enumerate(important_scores), key=lambda x: x[1], reverse=True)
-    # print(list_of_index)
-    final_words = copy.deepcopy(words)
+    #sort by important score
+    list_of_index = sorted(enumerate(important_scores), key=lambda x: x[1], reverse=True) # sort the important score and index 
+    # print(list_of_index)  
+    # => [(59, 0.00014871359), (58, 0.00011396408), (60, 0.00010085106), .... ]      [(index, Importacne score), ....]
+    final_words = copy.deepcopy(words) #whole word corpus from mlm 
 
+     
     for top_index in list_of_index:
+        #limit ratio of word change
         if feature.change > int(0.4 * (len(words))):
             feature.success = 1  # exceed
             return feature
@@ -293,8 +333,10 @@ def attack(feature, tgt_model, mlm_model, tokenizer, k, batch_size, max_length=5
             if substitute in w2i and tgt_word in w2i:
                 if cos_mat[w2i[substitute]][w2i[tgt_word]] < 0.4:
                     continue
+            
+            #Replace word and check whether the attack is successful
             temp_replace = final_words
-            temp_replace[top_index[0]] = substitute
+            temp_replace[top_index[0]] = substitute # replace token
             temp_text = tokenizer.convert_tokens_to_string(temp_replace)
             inputs = tokenizer.encode_plus(temp_text, None, add_special_tokens=True, max_length=max_length, )
             input_ids = torch.tensor(inputs["input_ids"]).unsqueeze(0).to('cuda')
@@ -303,13 +345,14 @@ def attack(feature, tgt_model, mlm_model, tokenizer, k, batch_size, max_length=5
             feature.query += 1
             temp_prob = torch.softmax(temp_prob, -1)
             temp_label = torch.argmax(temp_prob)
-
+            #Success
             if temp_label != orig_label:
                 feature.change += 1
                 final_words[top_index[0]] = substitute
                 feature.changes.append([keys[top_index[0]][0], substitute, tgt_word])
                 feature.final_adverse = temp_text
                 feature.success = 4
+                
                 return feature
             else:
 
@@ -383,6 +426,7 @@ def evaluate(features):
     total_change = 0
     total_word = 0
     for feat in features:
+        #Attack Success if feat success = 3 or 4
         if feat.success > 2:
 
             if do_use == 1:
@@ -408,7 +452,7 @@ def evaluate(features):
     origin_acc = 1 - origin_success / total
     after_atk = 1 - suc
 
-    print('acc/aft-atk-acc {:.6f}/ {:.6f}, query-num {:.4f}, change-rate {:.4f}'.format(origin_acc, after_atk, query, change_rate))
+    print('\n Result : acc/aft-atk-acc {:.6f}/ {:.6f}, query-num {:.4f}, change-rate {:.4f}'.format(origin_acc, after_atk, query, change_rate))
 
 
 def dump_features(features, output):
@@ -432,21 +476,35 @@ def dump_features(features, output):
 
 def run_attack():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_path", type=str, help="./data/xxx")
-    parser.add_argument("--mlm_path", type=str, help="xxx mlm")
-    parser.add_argument("--tgt_path", type=str, help="xxx classifier")
+    parser.add_argument("--data_path", type=str, default="data_defense/imdb_1k.tsv", help="./data/xxx")
+    parser.add_argument("--mlm_path", type=str, default="bert-base-uncased", help="xxx mlm")
+    parser.add_argument("--tgt_path", type=str, default="textattack/bert-base-uncased-imdb", help="xxx classifier")
 
-    parser.add_argument("--output_dir", type=str, help="train file")
-    parser.add_argument("--use_sim_mat", type=int, help='whether use cosine_similarity to filter out atonyms')
-    parser.add_argument("--start", type=int, help="start step, for multi-thread process")
-    parser.add_argument("--end", type=int, help="end step, for multi-thread process")
-    parser.add_argument("--num_label", type=int, )
-    parser.add_argument("--use_bpe", type=int, )
-    parser.add_argument("--k", type=int, )
-    parser.add_argument("--threshold_pred_score", type=float, )
-
+    parser.add_argument("--output_dir", default="data_defense/imdb_logs.tsv", type=str, help="train file")
+    parser.add_argument("--use_sim_mat", default=0, type=int, help='whether use cosine_similarity to filter out atonyms')
+    parser.add_argument("--start", type=int, default=0, help="start step, for multi-thread process")
+    parser.add_argument("--end", type=int, default=1000, help="end step, for multi-thread process")
+    parser.add_argument("--num_label", type=int, default=2)
+    parser.add_argument("--use_bpe", type=int, default=1)
+    parser.add_argument("--k", type=int, default=48)
+    parser.add_argument("--threshold_pred_score", type=float, default=0)
 
     args = parser.parse_args()
+
+    # args = easydict.EasyDict({ "data_path": "data_defense/imdb_1k.tsv" ,              # data_defense/imdb_1k.tsv, multi_nli 
+    #                           "mlm_path": "bert-base-uncased" ,        #'Bert' in figure1 
+    #                           "tgt_path" : "textattack/bert-base-uncased-imdb",       # Target model in figure 1w11wo/javanese-bert-small-imdb-classifier, textattack/bert-base-uncased-imdb , roberta-large-mnli
+    #                           "output_dir" : "data_defense/imdb_logs.tsv",            #data_defense/imdb_logs.tsv , data_defense/multi_nli_logs.tsv
+    #                           "use_sim_mat" : 0,
+    #                           "start" : 0,
+    #                           "end" : 1000,
+    #                           "num_label" : 2,                                        # number of label of dataset imdb = 2 mnli =3
+    #                           "use_bpe" : 1,
+    #                           "k" : 48,
+    #                           "threshold_pred_score" : 0})
+    
+
+    # args = parser.parse_args()
     data_path = str(args.data_path)
     mlm_path = str(args.mlm_path)
     tgt_path = str(args.tgt_path)
@@ -459,7 +517,7 @@ def run_attack():
     threshold_pred_score = args.threshold_pred_score
 
     print('start process')
-
+    start_t = timer()
     tokenizer_mlm = BertTokenizer.from_pretrained(mlm_path, do_lower_case=True)
     tokenizer_tgt = BertTokenizer.from_pretrained(tgt_path, do_lower_case=True)
 
@@ -471,6 +529,7 @@ def run_attack():
     tgt_model = BertForSequenceClassification.from_pretrained(tgt_path, config=config_tgt)
     tgt_model.to('cuda')
     features = get_data_cls(data_path)
+
     print('loading sim-embed')
     
     if args.use_sim_mat == 1:
@@ -489,13 +548,15 @@ def run_attack():
             # print(feat.seq[:100], feat.label)
             feat = attack(feat, tgt_model, mlm_model, tokenizer_tgt, k, batch_size=32, max_length=512,
                           cos_mat=cos_mat, w2i=w2i, i2w=i2w, use_bpe=use_bpe,threshold_pred_score=threshold_pred_score)
-
-            # print(feat.changes, feat.change, feat.query, feat.success)
+            
+            print(feat.changes, feat.change, feat.query, feat.success)
             if feat.success > 2:
                 print('success', end='')
-            else:
+            else: 
                 print('failed', end='')
             features_output.append(feat)
+    end_t = timer()
+    print(timedelta(seconds=end_t -start_t))
 
     evaluate(features_output)
 
