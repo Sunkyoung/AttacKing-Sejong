@@ -5,15 +5,24 @@ Code for our EMNLP2020 long paper:
 *[BERT-ATTACK: Adversarial Attack Against BERT Using BERT](https://arxiv.org/abs/2004.09984)*
 
 
+# Convention commit 
+[Conventional Commits/Angular convention](https://github.com/angular/angular/blob/22b96b9/CONTRIBUTING.md#type)
+
+build: Changes that affect the build system or external dependencies (example scopes: gulp, broccoli, npm)
+ci: Changes to our CI configuration files and scripts (example scopes: Travis, Circle, BrowserStack, SauceLabs)
+docs: Documentation only changes
+feat: A new feature
+fix: A bug fix
+perf: A code change that improves performance
+refactor: A code change that neither fixes a bug nor adds a feature
+style: Changes that do not affect the meaning of the code (white-space, formatting, missing semi-colons, etc)
+test: Adding missing tests or correcting existing tests
 
 ## Dependencies
 - Python 3.7
 - [PyTorch](https://github.com/pytorch/pytorch) 1.4.0
 - [transformers](https://github.com/huggingface/transformers) 2.9.0
 - [TextFooler](https://github.com/jind11/TextFooler)
-
-
-
 
 ## Usage
 
