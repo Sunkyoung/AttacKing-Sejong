@@ -18,6 +18,8 @@ import copy
 import numpy as np
 from timeit import default_timer as timer
 from datetime import timedelta
+from data.tokenization import FullTokenizer
+from data.preprocessing import NsmcProcessor
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -196,7 +198,7 @@ def get_substitues(substitutes, tokenizer, mlm_model, use_bpe, substitutes_score
         for (i,j) in zip(substitutes[0], substitutes_score[0]):
             if threshold != 0 and j < threshold:
                 break
-            words.append(tokenizer._convert_id_to_token(int(i)))
+            words.append(tokenizer.convert_id_to_token(int(i)))
     # composed of more than 2 subword
     else:
         if use_bpe == 1:
@@ -262,6 +264,7 @@ return : feature that succeeded in attack
 def attack(feature, tgt_model, mlm_model, tokenizer, k, batch_size, max_length=512, cos_mat=None, w2i={}, i2w={}, use_bpe=1, threshold_pred_score=0.3):
     # MLM-process
     words, sub_words, keys = _tokenize(feature.seq, tokenizer)
+    morphemes = tokenizer.tokenize()
 
     # original label
     inputs = tokenizer.encode_plus(feature.seq, None, add_special_tokens=True, max_length=max_length, )
@@ -518,8 +521,19 @@ def run_attack():
 
     print('start process')
     start_t = timer()
-    tokenizer_mlm = BertTokenizer.from_pretrained(mlm_path, do_lower_case=True)
-    tokenizer_tgt = BertTokenizer.from_pretrained(tgt_path, do_lower_case=True)
+    tokenizer = FullTokenizer(vocab_file='vocab.txt', do_lower_case=False)
+    # tokenizer_mlm = BertTokenizer.from_pretrained(mlm_path, do_lower_case=True)
+    # tokenizer_tgt = BertTokenizer.from_pretrained(tgt_path, do_lower_case=True)
+    # from transformers import AutoModel, AutoTokenizer
+    # model_lst = [
+    # "klue/bert-base",
+    # "klue/roberta-small",
+    # "klue/roberta-base",
+    # "klue/roberta-large"
+    # ]
+    # for model_name in model_lst:
+    #     model = AutoModel.from_pretrained(model_name)
+    #     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
     config_atk = BertConfig.from_pretrained(mlm_path)
     mlm_model = BertForMaskedLM.from_pretrained(mlm_path, config=config_atk)
@@ -528,6 +542,18 @@ def run_attack():
     config_tgt = BertConfig.from_pretrained(tgt_path, num_labels=num_label)
     tgt_model = BertForSequenceClassification.from_pretrained(tgt_path, config=config_tgt)
     tgt_model.to('cuda')
+
+
+    processors = {
+        "nsmc": NsmcProcessor,
+    }
+
+    # key: args.task_name (TBD) 
+    processor = processors["nsmc"]()
+    label_list = processor.get_labels()
+    num_labels = len(label_list)
+    target_examples = processor.get_target_examples('./data/target') # args.data_dir
+
     features = get_data_cls(data_path)
 
     print('loading sim-embed')
@@ -546,7 +572,7 @@ def run_attack():
             feat = Feature(seq_a, label)
             print('\r number {:d} '.format(index) + tgt_path, end='')
             # print(feat.seq[:100], feat.label)
-            feat = attack(feat, tgt_model, mlm_model, tokenizer_tgt, k, batch_size=32, max_length=512,
+            feat = attack(feat, tgt_model, mlm_model, tokenizer, k, batch_size=32, max_length=512,
                           cos_mat=cos_mat, w2i=w2i, i2w=i2w, use_bpe=use_bpe,threshold_pred_score=threshold_pred_score)
             
             print(feat.changes, feat.change, feat.query, feat.success)
