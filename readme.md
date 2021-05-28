@@ -1,8 +1,9 @@
-# BERT-ATTACK
 
-Code for our EMNLP2020 long paper:
 
-*[BERT-ATTACK: Adversarial Attack Against BERT Using BERT](https://arxiv.org/abs/2004.09984)*
+CS475 Team Project : Replicate BERT-Attack in Korean  
+
+## **BERT-ATTACK (EMNLP 2019)**
+[[PAPER]](https://arxiv.org/abs/2004.09984)
 
 
 # Convention commit 
@@ -19,6 +20,7 @@ Code for our EMNLP2020 long paper:
 - test: Adding missing tests or correcting existing tests
 
 ## Dependencies
+Upgrade version of dependencies (TBD)
 - Python 3.7
 - [PyTorch](https://github.com/pytorch/pytorch) 1.4.0
 - [transformers](https://github.com/huggingface/transformers) 2.9.0
