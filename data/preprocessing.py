@@ -1,4 +1,6 @@
+import json
 import os
+
 
 class InputExample(object):
     """A single training/test example"""
@@ -22,7 +24,7 @@ class InputExample(object):
 
 class InputFeatures(object):
     """A single set of features of data."""
-    
+
     def __init__(self, input_ids, input_mask, segment_ids, label_id):
         self.input_ids = input_ids
         self.input_mask = input_mask
@@ -47,14 +49,27 @@ class DataProcessor(object):
         with open(input_file, "r") as f:
             lines = f.readlines()
             data = []
-            for line in lines[1:] : # remove header
-                data.extend(line.split('\t'))
+            for line in lines[1:]:  # remove header
+                data.extend(line.split("\t"))
             return data
+
+    @classmethod
+    def _read_json(cls, input_file, label_dict=None):
+        """Reads a tab separated value file."""
+        with open(input_file, "r") as f:
+            raw_data = json.load(f)
+            data = []
+            for rd in raw_data:
+                label = label_dict.get(rd["label"]) if label_dict else rd["label"]
+                data.append([rd["guid"], rd["title"], label])
+            return data
+
 
 class NsmcProcessor(DataProcessor):
     def get_target_examples(self, data_dir):
         return self._create_examples(
-            self._read_txt(os.path.join(data_dir, "rating.txt")))
+            self._read_txt(os.path.join(data_dir, "rating.txt"))
+        )
 
     def get_labels(self):
         return ["0", "1"]
@@ -62,21 +77,48 @@ class NsmcProcessor(DataProcessor):
     def _create_examples(self, data):
         examples = []
         for d in data:
-            examples.append(
-                InputExample(guid = d[0], label = d[2], first_sequence = d[1]))
+            examples.append(InputExample(guid=d[0], label=d[2], first_sequence=d[1]))
         return examples
+
+
+class YnatProcessor(DataProcessor):
     
+    label_dict = { 
+        "정치": 0,
+        "경제": 1,
+        "사회": 2,
+        "생활문화": 3,
+        "세계": 4,
+        "IT과학": 5,
+        "스포츠": 6,
+    }
+
+    def get_target_examples(self, data_dir):
+        return self._create_examples(
+            self._read_json(os.path.join(data_dir, ".json"), self.label_dict)
+        )
+
+    def get_labels(self):
+        return list(self.label_dict.values())
+
+    def _create_examples(self, data):
+        examples = []
+        for d in data:
+            examples.append(InputExample(guid=d[0], label=d[2], first_sequence=d[1]))
+        return examples
+
+
 def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer):
     """Loads a data file into a list of `InputBatch`s."""
 
-    label_map = {label : i for i, label in enumerate(label_list)}
+    label_map = {label: i for i, label in enumerate(label_list)}
     features = []
 
     for example in examples:
-        first_tokens = tokenizer.tokenize     
+        first_tokens = tokenizer.tokenize
         second_tokens = None
         if example.second_sequence:
-            second_tokens = tokenizer.tokenize(second_tokens)        
+            second_tokens = tokenizer.tokenize(second_tokens)
 
             # Modifies `first_tokens` and `second_tokens` in place so that the total
             # length is less than the specified length.
@@ -85,7 +127,7 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
         else:
             # Account for [CLS] and [SEP] with "- 2"
             if len(first_tokens) > max_seq_length - 2:
-                first_tokens = first_tokens[:(max_seq_length-2)]
+                first_tokens = first_tokens[: (max_seq_length - 2)]
 
         tokens = ["[CLS]"] + first_tokens + ["[SEP]"]
         segment_ids = [0] * len(tokens)
@@ -112,10 +154,13 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
 
         label_id = label_map[example.label]
         features.append(
-                InputFeatures(input_ids=input_ids,
-                              input_mask=input_mask,
-                              segment_ids=segment_ids,
-                              label_id=label_id))
+            InputFeatures(
+                input_ids=input_ids,
+                input_mask=input_mask,
+                segment_ids=segment_ids,
+                label_id=label_id,
+            )
+        )
     return features
 
 
