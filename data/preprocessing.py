@@ -95,7 +95,7 @@ class YnatProcessor(DataProcessor):
 
     def get_target_examples(self, data_dir):
         return self._create_examples(
-            self._read_json(os.path.join(data_dir, ".json"), self.label_dict)
+            self._read_json(os.path.join(data_dir, "ynat-v1_dev.json"), self.label_dict)
         )
 
     def get_labels(self):
@@ -107,15 +107,18 @@ class YnatProcessor(DataProcessor):
             examples.append(InputExample(guid=d[0], label=d[2], first_sequence=d[1]))
         return examples
 
-
-def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer):
+def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer=None):
     """Loads a data file into a list of `InputBatch`s."""
 
     label_map = {label: i for i, label in enumerate(label_list)}
     features = []
 
     for example in examples:
-        first_tokens = tokenizer.tokenize
+        if tokenizer:
+            first_tokens = tokenizer.tokenize(first_tokens)
+        else:
+            first_tokens = first_tokens.strip().split()
+
         second_tokens = None
         if example.second_sequence:
             second_tokens = tokenizer.tokenize(second_tokens)
@@ -179,3 +182,17 @@ def _truncate_seq_pair(first_tokens, second_tokens, max_length):
             first_tokens.pop()
         else:
             second_tokens.pop()
+
+def convert_to_tensordata(inputs, labels, masks):
+    t_inputs = torch.tensor(inputs)
+    t_labels = torch.tensor(labels)
+    t_masks = torch.tensor(masks)
+
+    return TensorDataset(t_inputs, t_masks, t_labels)
+
+def get_dataloader(self, dataset_type: str, batch_size: int, shuffle: bool = False):
+    return DataLoader(
+        self.prepare_dataset(dataset_type),
+        batch_size=batch_size,
+        shuffle=shuffle,
+    )
