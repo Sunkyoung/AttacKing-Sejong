@@ -29,6 +29,7 @@ class InputFeatures(object):
         self.segment_ids = segment_ids
         self.label_id = label_id
 
+
 class DataProcessor(object):
     """Base class for data converters for sequence classification data sets."""
 
