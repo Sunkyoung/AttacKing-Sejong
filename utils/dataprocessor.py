@@ -32,11 +32,13 @@ class InputFeatures(object):
         self.segment_ids = segment_ids
         self.label_id = label_id
 
-
 class DataProcessor(object):
     """Base class for data converters for sequence classification data sets."""
+    def get_train_data(self, data_dir: str) -> TensorDataset:
+        """Gets a collection of `InputExample`s for the train set."""
+        raise NotImplementedError()
 
-    def get_target_data(self, data_dir: str) -> TensorDataset:
+    def get_dev_data(self, data_dir: str) -> TensorDataset:
         """Gets a collection of `InputExample`s for the train set."""
         raise NotImplementedError()
 
@@ -66,9 +68,9 @@ class DataProcessor(object):
 
 
 class NsmcProcessor(DataProcessor):
-    def get_target_data(self, data_dir: str) -> TensorDataset:
+    def get_dev_data(self, data_dir: str) -> TensorDataset:
         return self._create_examples(
-            self._read_txt(os.path.join(data_dir, "rating.txt"))
+            self._read_txt(os.path.join(data_dir, "rating_test.txt"))
         )
 
     def get_labels(self) -> List[str]:
@@ -85,7 +87,12 @@ class YnatProcessor(DataProcessor):
     def __init__(self, args, tokenizer):
         super().__init__(args, tokenizer)
 
-    def get_target_data(self, data_dir: str) -> List[InputExample]:
+    def get_train_data(self, data_dir: str) -> List[InputExample]:
+        return self._create_dataset(
+            self._read_json(os.path.join(data_dir, "ynat-v1_train.json"))
+        )
+        
+    def get_dev_data(self, data_dir: str) -> List[InputExample]:
         return self._create_dataset(
             self._read_json(os.path.join(data_dir, "ynat-v1_dev.json"))
         )
