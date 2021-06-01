@@ -110,7 +110,7 @@ class YnatProcessor(DataProcessor):
             guid, first_seq, label = d
             examples.append(InputExample(guid, first_seq, label))
         return self._convert_examples_to_features(
-            examples, self.get_labels, self.args.max_seq_length, self.tokenizer
+            examples, self.get_labels(), self.args.max_seq_length, self.tokenizer
         )
 
     def _convert_examples_to_features(
