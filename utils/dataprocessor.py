@@ -63,7 +63,7 @@ class DataProcessor(object):
             raw_data = json.load(f)
             data = []
             for rd in raw_data:
-                data.append([rd["guid"], rd["label"], rd["title"]])
+                data.append([rd["guid"], rd["title"], rd["label"]])
             return data
 
 
@@ -79,7 +79,8 @@ class NsmcProcessor(DataProcessor):
     def _create_examples(self, data):
         examples = []
         for d in data:
-            examples.append(InputExample(guid=d[0], label=d[2], first_seq=d[1]))
+            guid, first_seq, label = d
+            examples.append(InputExample(guid, first_seq, label))
         return examples
 
 
@@ -91,7 +92,7 @@ class YnatProcessor(DataProcessor):
         return self._create_dataset(
             self._read_json(os.path.join(data_dir, "ynat-v1_train.json"))
         )
-        
+
     def get_dev_data(self, data_dir: str) -> List[InputExample]:
         return self._create_dataset(
             self._read_json(os.path.join(data_dir, "ynat-v1_dev.json"))
@@ -106,7 +107,8 @@ class YnatProcessor(DataProcessor):
     def _create_examples(self, data):
         examples = []
         for d in data:
-            examples.append(InputExample(guid=d[0], label=d[1], first_seq=d[2]))
+            guid, first_seq, label = d
+            examples.append(InputExample(guid, first_seq, label))
         return self._convert_examples_to_features(
             examples, self.get_labels, self.args.max_seq_length, self.tokenizer
         )
