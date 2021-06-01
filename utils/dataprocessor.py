@@ -36,6 +36,19 @@ class InputFeatures(object):
         self.label_id = label_id
 
 
+class OutputFeatures(object):
+    def __init__(self, label_id: int, first_seq: str, second_seq: str = None):
+        self.label_id = label_id
+        self.first_seq = first_seq
+        self.second_seq = second_seq
+        self.final_text = None
+        self.similarity = 0.0
+        self.query_length = 0
+        self.num_changes = 0
+        self.changes = []
+        self.success_indication = None
+
+
 class DataProcessor(object):
     """Base class for data converters for sequence classification data sets."""
 
