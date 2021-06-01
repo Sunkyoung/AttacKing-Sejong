@@ -166,13 +166,15 @@ class YnatProcessor(DataProcessor):
             assert len(input_ids) == max_seq_length
             assert len(input_mask) == max_seq_length
             
-            label_id = label_map[example.label]
+            label_id = [0.] * len(label_list)
+            label_id[label_map[example.label]] += 1
+
             features.append(
                 InputFeatures(
                     input_ids=input_ids,
                     input_mask=input_mask,
-                    segment_ids=segment_ids,
                     label_id=label_id,
+                    segment_ids=segment_ids if segment_ids else None
                 )
             )
 
