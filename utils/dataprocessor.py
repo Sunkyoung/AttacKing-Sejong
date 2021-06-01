@@ -1,16 +1,19 @@
 import argparse
 import json
 import os
-import torch
-
-from torch.utils.data import TensorDataset
-from Overrides import overrides
 from typing import List, Optional
+
+import torch
+from Overrides import overrides
+from torch.utils.data import TensorDataset
+
 
 class InputExample(object):
     """A single example"""
 
-    def __init__(self, guid: str, label: str, first_seq: str, second_seq: Optional[str] = None):
+    def __init__(
+        self, guid: str, label: str, first_seq: str, second_seq: Optional[str] = None
+    ):
         self.guid = guid
         self.label = label
         self.first_seq = first_seq
@@ -25,15 +28,17 @@ class InputFeatures(object):
         input_ids: List[int],
         input_mask: List[int],
         label_id: Optional[int] = None,
-        segment_ids:  Optional[List[int]]=None,
+        segment_ids: Optional[List[int]] = None,
     ):
         self.input_ids = input_ids
         self.input_mask = input_mask
         self.segment_ids = segment_ids
         self.label_id = label_id
 
+
 class DataProcessor(object):
     """Base class for data converters for sequence classification data sets."""
+
     def get_train_data(self, data_dir: str) -> TensorDataset:
         """Gets a collection of `InputExample`s for the train set."""
         raise NotImplementedError()
@@ -52,7 +57,7 @@ class DataProcessor(object):
         label_list: List[str],
         max_seq_length: int,
         tokenizer,
-        do_whitespace_tokenize
+        do_whitespace_tokenize,
     ) -> TensorDataset:
 
         """Loads a data file into a list of `InputBatch`s."""
@@ -86,7 +91,7 @@ class DataProcessor(object):
             input_ids += padding
             input_mask += padding
             segment_ids += padding
-              
+
             assert len(input_ids) == max_seq_length
             assert len(input_mask) == max_seq_length
             assert len(segment_ids) == max_seq_length
@@ -98,7 +103,7 @@ class DataProcessor(object):
                     input_ids=input_ids,
                     input_mask=input_mask,
                     label_id=label_id,
-                    segment_ids=segment_ids
+                    segment_ids=segment_ids,
                 )
             )
 
@@ -120,8 +125,12 @@ class DataProcessor(object):
     def _convert_to_tensordata(self, features: List[InputFeatures]) -> TensorDataset:
         """ Convert to Tensors and build dataset """
         all_input_ids = torch.tensor([f.input_ids for f in features], dtype=torch.long)
-        all_input_mask = torch.tensor([f.input_mask for f in features], dtype=torch.long)
-        all_segment_ids = torch.tensor([f.segment_ids for f in features], dtype=torch.long)
+        all_input_mask = torch.tensor(
+            [f.input_mask for f in features], dtype=torch.long
+        )
+        all_segment_ids = torch.tensor(
+            [f.segment_ids for f in features], dtype=torch.long
+        )
         all_label_ids = torch.tensor([f.label_id for f in features], dtype=torch.long)
 
         return TensorDataset(
@@ -147,7 +156,7 @@ class DataProcessor(object):
             for rd in raw_data:
                 data.append([rd["guid"], rd["title"], rd["label"]])
             return data
-    
+
 
 class NsmcProcessor(DataProcessor):
     def get_dev_data(self, data_dir: str) -> TensorDataset:
@@ -172,7 +181,7 @@ class YnatProcessor(DataProcessor):
         self.args = args
         self.tokenizer = tokenizer
         self.max_seq_length = 512
-        
+
     def get_train_data(self, data_dir: str) -> List[InputExample]:
         return self._create_dataset(
             self._read_json(os.path.join(data_dir, "ynat-v1_train.json"))
@@ -195,7 +204,11 @@ class YnatProcessor(DataProcessor):
             guid, first_seq, label = d
             examples.append(InputExample(guid, first_seq, label))
         return self.convert_examples_to_features(
-            examples, self.get_labels(), self.args.max_seq_length, self.tokenizer, self.args.whitespace_tokenize
+            examples,
+            self.get_labels(),
+            self.args.max_seq_length,
+            self.tokenizer,
+            self.args.whitespace_tokenize,
         )
 
     @overrides
@@ -205,7 +218,7 @@ class YnatProcessor(DataProcessor):
         label_list: List[str],
         max_seq_length: int,
         tokenizer,
-        do_whitespace_tokenize
+        do_whitespace_tokenize,
     ) -> TensorDataset:
 
         """Loads a data file into a list of `InputBatch`s."""
@@ -236,8 +249,8 @@ class YnatProcessor(DataProcessor):
 
             assert len(input_ids) == max_seq_length
             assert len(input_mask) == max_seq_length
-            
-            label_id = [0.] * len(label_list)
+
+            label_id = [0.0] * len(label_list)
             label_id[label_map[example.label]] += 1
 
             features.append(
@@ -245,7 +258,7 @@ class YnatProcessor(DataProcessor):
                     input_ids=input_ids,
                     input_mask=input_mask,
                     label_id=label_id,
-                    segment_ids=None
+                    segment_ids=None,
                 )
             )
 
@@ -255,12 +268,12 @@ class YnatProcessor(DataProcessor):
     def _convert_to_tensordata(self, features: List[InputFeatures]) -> TensorDataset:
         """ Convert to Tensors and build dataset """
         all_input_ids = torch.tensor([f.input_ids for f in features], dtype=torch.long)
-        all_input_mask = torch.tensor([f.input_mask for f in features], dtype=torch.long)
+        all_input_mask = torch.tensor(
+            [f.input_mask for f in features], dtype=torch.long
+        )
         all_label_ids = torch.tensor([f.label_id for f in features], dtype=torch.float)
 
-        return TensorDataset(
-            all_input_ids, all_input_mask, all_label_ids
-        )
+        return TensorDataset(all_input_ids, all_input_mask, all_label_ids)
 
     @staticmethod
     def add_specific_args(
@@ -273,9 +286,6 @@ class YnatProcessor(DataProcessor):
             help="The maximum total input sequence length after WordPiece tokenization. Sequences "
             "longer than this will be truncated, and sequences shorter than this will be padded.",
         )
-        parser.add_argument(
-            "--do-whitespace-tokenize",
-            action='store_true'
-        )
+        parser.add_argument("--do-whitespace-tokenize", action="store_true")
 
         return parser
