@@ -1,7 +1,7 @@
 import argparse
 import json
 import os
-from typing import List
+from typing import List, Optional
 
 import torch
 from torch.utils.data import TensorDataset
@@ -10,7 +10,7 @@ from torch.utils.data import TensorDataset
 class InputExample(object):
     """A single example"""
 
-    def __init__(self, guid: str, label: str, first_seq: str, second_seq: str = None):
+    def __init__(self, guid: str, label: str, first_seq: str, second_seq: Optional[str] = None):
         self.guid = guid
         self.label = label
         self.first_seq = first_seq
@@ -24,8 +24,8 @@ class InputFeatures(object):
         self,
         input_ids: List[int],
         input_mask: List[int],
-        segment_ids: List[int],
-        label_id: int,
+        label_id: Optional[int] = None,
+        segment_ids:  Optional[List[int]]=None,
     ):
         self.input_ids = input_ids
         self.input_mask = input_mask
