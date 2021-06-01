@@ -85,7 +85,7 @@ class NsmcProcessor(DataProcessor):
 
 
 class YnatProcessor(DataProcessor):
-    def __init__(self, args, tokenizer):
+    def __init__(self, args, tokenizer = None):
         super().__init__()
         self.args = args
         self.tokenizer = tokenizer
@@ -121,7 +121,7 @@ class YnatProcessor(DataProcessor):
         examples: List[InputExample],
         label_list: List[str],
         max_seq_length: int,
-        tokenizer=None,
+        tokenizer = None,
     ) -> TensorDataset:
 
         """Loads a data file into a list of `InputBatch`s."""
@@ -134,7 +134,6 @@ class YnatProcessor(DataProcessor):
             else:  # white space 기준 만으로 token화
                 first_tokens = example.first_seq.strip().split()
 
-            second_tokens = None
             if example.second_seq:
                 second_tokens = tokenizer.tokenize(example.second_seq)
                 # Account for [CLS], [SEP], [SEP] with "- 3"
@@ -145,9 +144,9 @@ class YnatProcessor(DataProcessor):
                     first_tokens = first_tokens[: (max_seq_length - 2)]
 
             tokens = ["[CLS]"] + first_tokens + ["[SEP]"]
-            segment_ids = [0] * len(tokens)
 
             if second_tokens:
+                segment_ids = [0] * len(tokens)
                 tokens += second_tokens + ["[SEP]"]
                 segment_ids += [1] * (len(second_tokens) + 1)
 
@@ -161,12 +160,12 @@ class YnatProcessor(DataProcessor):
             padding = [0] * (max_seq_length - len(input_ids))
             input_ids += padding
             input_mask += padding
-            segment_ids += padding
-
+            if second_tokens:
+              segment_ids += padding
+              assert len(segment_ids) == max_seq_length
             assert len(input_ids) == max_seq_length
             assert len(input_mask) == max_seq_length
-            assert len(segment_ids) == max_seq_length
-
+            
             label_id = label_map[example.label]
             features.append(
                 InputFeatures(
