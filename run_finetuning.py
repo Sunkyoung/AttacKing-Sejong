@@ -1,21 +1,12 @@
 # Finetuning script for YNAT(KLUE-TC) dataset
-
-import collections
 import datetime
-import json
-import os
 import random
-import re
 import time
-from collections import OrderedDict
-from typing import List, Optional
-
 import numpy as np
-import pandas as pd
+
 import torch
 import torch.nn as nn
 from torch.utils.data import (DataLoader, RandomSampler, SequentialSampler,)
-from tqdm import tqdm
 from transformers import (AdamW, AutoModelForSequenceClassification,
                           AutoTokenizer, get_linear_schedule_with_warmup)
 
@@ -182,3 +173,6 @@ def run():
         torch.save(
             (model.state_dict(), optimizer.state_dict()), f"./model_{epoch+1}.pt"
         )
+
+if __name__=="__main__":
+    run()
