@@ -86,8 +86,11 @@ class NsmcProcessor(DataProcessor):
 
 class YnatProcessor(DataProcessor):
     def __init__(self, args, tokenizer):
-        super().__init__(args, tokenizer)
-
+        super().__init__()
+        self.args = args
+        self.tokenizer = tokenizer
+        self.max_seq_length = 512
+        
     def get_train_data(self, data_dir: str) -> List[InputExample]:
         return self._create_dataset(
             self._read_json(os.path.join(data_dir, "ynat-v1_train.json"))
