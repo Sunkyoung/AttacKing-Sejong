@@ -15,7 +15,7 @@ class SuccessIndicator(Enum):
     attack_fail = 3
     attack_success = 4
 
-def get_important_scores(processor, target_features, tgt_model, orig_prob, orig_label, orig_probs, batch_size):
+def get_important_scores(processor, target_features, tgt_model, current_prob, orig_label, pred_logits, batch_size):
     masked_features = processor._get_masked(target_features)
     eval_sampler = SequentialSampler(masked_features)
     eval_dataloader = DataLoader(masked_features, sampler=eval_sampler, batch_size=batch_size)
@@ -32,7 +32,7 @@ def get_important_scores(processor, target_features, tgt_model, orig_prob, orig_
     leave_1_probs_argmax = torch.argmax(leave_1_probs, dim=-1)
     import_scores = (
         (
-            orig_prob
+            current_prob
             - leave_1_probs[
                 :, orig_label
             ]  # Difference between original logit output and 1 masked logit output
@@ -41,7 +41,7 @@ def get_important_scores(processor, target_features, tgt_model, orig_prob, orig_
             ).float()
             * (
                 leave_1_probs.max(dim=-1)[0]
-                - torch.index_select(orig_probs, 0, leave_1_probs_argmax)
+                - torch.index_select(pred_logit, 0, leave_1_probs_argmax)
             )
         )
         .data.cpu()
@@ -68,52 +68,6 @@ def attack(
     # MLM-process
 
     # original label
-    inputs = tokenizer.encode_plus(
-        feature.first_seq,
-        None,
-        add_special_tokens=True,
-        max_length=max_length,
-    )
-    input_ids, token_type_ids = torch.tensor(inputs["input_ids"]), torch.tensor(
-        inputs["token_type_ids"]
-    )
-    attention_mask = torch.tensor([1] * len(input_ids))
-    seq_len = input_ids.size(0)
-    orig_probs = tgt_model(
-        input_ids.unsqueeze(0).to("cuda"),
-        attention_mask.unsqueeze(0).to("cuda"),
-        token_type_ids.unsqueeze(0).to("cuda"),
-    )[0].squeeze()
-    orig_probs = torch.softmax(orig_probs, -1)
-    orig_label = torch.argmax(orig_probs)
-    current_prob = orig_probs.max()
-
-    if orig_label != feature.label_id:
-        feature.success_indication = SuccessIndicator.predict_fail
-        return feature
-
-    sub_words = ["[CLS]"] + sub_words[: max_length - 2] + ["[SEP]"]
-    input_ids_ = torch.tensor([tokenizer.convert_tokens_to_ids(sub_words)])
-    word_predictions = mlm_model(input_ids_.to("cuda"))[
-        0
-    ].squeeze()  # seq-len(sub) vocab.
-    word_pred_scores_all, word_predictions = torch.topk(
-        word_predictions, k, -1
-    )  # seq-len k  #top k prediction
-
-    word_predictions = word_predictions[1 : len(sub_words) + 1, :]
-    word_pred_scores_all = word_pred_scores_all[1 : len(sub_words) + 1, :]
-
-    important_scores = get_important_scores(
-        words,
-        tgt_model,
-        current_prob,
-        orig_label,
-        orig_probs,  # get important score
-        tokenizer,
-        batch_size,
-        max_length,
-    )
     feature.query_length += int(len(words))
     # sort by important score
     list_of_index = sorted(
@@ -211,8 +165,37 @@ def attack(
     feature.success_indication = SuccessIndicator.attack_fail
     return feature
 
-def run_attack(processor, target_features, mlm_model, finetuned_model):
+def run_attack(processor, example, feature, pretrained_model, finetuned_model):
+    output = OutputFeatures(label_id=example.label, first_seq=example.first_seq)
+
+    with torch.no_grad():
+        logit = finetuned_model(
+            feature.input_ids, token_type_ids=None, attention_mask=feature.input_mask
+        )[0]
+        word_predictions = pretrained_model(feature.input_ids)[0].detach()
+    
+    pred_logit = logit.detach()
+    pred_label = torch.argmax(pred_logit, dim=1).flatten()
+    current_prob = pred_logit.max()
+
+    if pred_label != feature.label_id:
+        output.success_indication = SuccessIndicator.predict_fail
+        return output
+    
+    
+    sub_words = ["[CLS]"] + sub_words[: max_length - 2] + ["[SEP]"]
+    input_ids_ = torch.tensor([tokenizer.convert_tokens_to_ids(sub_words)])
+    word_predictions = mlm_model(input_ids_.to("cuda"))[
+        0
+    ].squeeze()  # seq-len(sub) vocab.
+    word_pred_scores_all, word_predictions = torch.topk(
+        word_predictions, k, -1
+    )  # seq-len k  #top k prediction
+
+    word_predictions = word_predictions[1 : len(sub_words) + 1, :]
+    word_pred_scores_all = word_pred_scores_all[1 : len(sub_words) + 1, :]
     get_important_scores(processor, target_features)
+    OutputFeatures.append(feat)
 
 
 
