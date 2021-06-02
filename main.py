@@ -37,8 +37,8 @@ def main(args):
     model_name = "klue/bert-base"
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     processor = YnatProcessor(args, tokenizer)
-
-    target_features = processor.get_target_data(args.data_dir)
+    target_examples = processor.get_dev_data(args.data_dir)
+    target_features = processor.get_features(target_examples)
     num_labels = len(processor.get_labels())
 
     mlm_config = AutoConfig.from_pretrained(model_name)
@@ -52,7 +52,7 @@ def main(args):
     )
     finetuned_model.to("cuda")
 
-    run_attack(processor, target_features, mlm_model, finetuned_model)
+    run_attack(processor, target_examples, target_features, mlm_model, finetuned_model)
 
 if __name__ == "__main__":
     main()

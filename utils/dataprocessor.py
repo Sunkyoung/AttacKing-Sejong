@@ -196,26 +196,19 @@ class YnatProcessor(DataProcessor):
         self.max_seq_length = 512
 
     def get_train_data(self, data_dir: str) -> List[InputExample]:
-        return self._create_dataset(
+        return self._create_examples(
             self._read_json(os.path.join(data_dir, "ynat-v1_train.json"))
         )
 
     def get_dev_data(self, data_dir: str) -> List[InputExample]:
-        return self._create_dataset(
+        return self._create_examples(
             self._read_json(os.path.join(data_dir, "ynat-v1_dev.json"))
         )
 
     def get_labels(self) -> List[str]:
         return ["정치", "사회", "경제", "세계", "생활문화", "IT과학", "스포츠"]
 
-    def _create_dataset(self, data):
-        return self._create_examples(data)
-
-    def _create_examples(self, data):
-        examples = []
-        for d in data:
-            guid, first_seq, label = d
-            examples.append(InputExample(guid, first_seq, label))
+    def get_features(self, examples) -> TensorDataset:
         return self.convert_examples_to_features(
             examples,
             self.get_labels(),
@@ -223,6 +216,13 @@ class YnatProcessor(DataProcessor):
             self.tokenizer,
             self.args.whitespace_tokenize,
         )
+
+    def _create_examples(self, data):
+        examples = []
+        for d in data:
+            guid, first_seq, label = d
+            examples.append(InputExample(guid, first_seq, label))
+        return examples
 
     @classmethod
     def _get_masked(self, features: List[InputFeatures]) -> TensorDataset:
