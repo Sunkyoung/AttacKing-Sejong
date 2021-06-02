@@ -60,9 +60,9 @@ def main(args):
     target_features = processor.get_features(target_examples)
     num_labels = len(processor.get_labels())
 
-    mlm_config = AutoConfig.from_pretrained(model_name)
-    mlm_model = AutoModelForMaskedLM.from_pretrained(model_name, config=mlm_config)
-    mlm_model.to("cuda")
+    pretrained_config = AutoConfig.from_pretrained(model_name)
+    pretrained_model = AutoModelForMaskedLM.from_pretrained(model_name, config=pretrained_config)
+    pretrained_model.to("cuda")
 
     finetuned_config = AutoConfig.from_pretrained(model_name, num_labels=num_labels)
     finetuned_model = AutoModel.from_pretrained(model_name)
@@ -73,7 +73,7 @@ def main(args):
 
     output_features = []
     for example, feature in zip(target_examples, target_features):
-        output = run_attack(processor, example, feature, mlm_model, finetuned_model)
+        output = run_attack(processor, example, feature, pretrained_model, finetuned_model)
         output_features.append(output)
     
     dump_features(output_features, args.output_dir)
