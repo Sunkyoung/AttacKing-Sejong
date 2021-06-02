@@ -1,8 +1,9 @@
+import argparse
+import torch
+
 from enum import Enum
-from typing import List
 from torch.utils.data import (DataLoader, SequentialSampler)
 from utils.dataprocessor import OutputFeatures
-import torch
 
 # feature.success = 1 : exceed ratio of word change
 # feature.success = 2 : Fail to attack
@@ -15,7 +16,7 @@ class SuccessIndicator(Enum):
     attack_fail = 3
     attack_success = 4
 
-def get_important_scores(processor, target_features, tgt_model, current_prob, orig_label, pred_logits, batch_size):
+def get_important_scores(processor, target_features, tgt_model, current_prob, orig_label, pred_logit, batch_size):
     masked_features = processor._get_masked(target_features)
     eval_sampler = SequentialSampler(masked_features)
     eval_dataloader = DataLoader(masked_features, sampler=eval_sampler, batch_size=batch_size)
@@ -50,122 +51,7 @@ def get_important_scores(processor, target_features, tgt_model, current_prob, or
 
     return import_scores
 
-
-def attack(
-    feature,
-    tgt_model,
-    mlm_model,
-    tokenizer,
-    k,
-    batch_size,
-    max_length=512,
-    cos_mat=None,
-    w2i={},
-    i2w={},
-    use_bpe=1,
-    threshold_pred_score=0.3,
-):
-    # MLM-process
-
-    # original label
-    feature.query_length += int(len(words))
-    # sort by important score
-    list_of_index = sorted(
-        enumerate(important_scores), key=lambda x: x[1], reverse=True
-    )  # sort the important score and index
-    # print(list_of_index)
-    # => [(59, 0.00014871359), (58, 0.00011396408), (60, 0.00010085106), .... ]      [(index, Importacne score), ....]
-    final_words = copy.deepcopy(words)  # whole word corpus from mlm
-
-    for top_index in list_of_index:
-        # limit ratio of word change
-        if feature.num_changes > int(0.4 * (len(words))):
-            feature.success_indication = SuccessIndicator.large_change  # exceed
-            return feature
-
-        tgt_word = words[top_index[0]]
-        if tgt_word in filter_words:
-            continue
-        if keys[top_index[0]][0] > max_length - 2:
-            continue
-
-        substitutes = word_predictions[
-            keys[top_index[0]][0] : keys[top_index[0]][1]
-        ]  # L, k
-        word_pred_scores = word_pred_scores_all[
-            keys[top_index[0]][0] : keys[top_index[0]][1]
-        ]
-
-        substitutes = get_substitues(
-            substitutes,
-            tokenizer,
-            mlm_model,
-            use_bpe,
-            word_pred_scores,
-            threshold_pred_score,
-        )
-
-        most_gap = 0.0
-        candidate = None
-
-        for substitute_ in substitutes:
-            substitute = substitute_
-
-            if substitute == tgt_word:
-                continue  # filter out original word
-            if "##" in substitute:
-                continue  # filter out sub-word
-
-            if substitute in filter_words:
-                continue
-            if substitute in w2i and tgt_word in w2i:
-                if cos_mat[w2i[substitute]][w2i[tgt_word]] < 0.4:
-                    continue
-
-            # Replace word and check whether the attack is successful
-            temp_replace = final_words
-            temp_replace[top_index[0]] = substitute  # replace token
-            temp_text = tokenizer.convert_tokens_to_string(temp_replace)
-            inputs = tokenizer.encode_plus(
-                temp_text,
-                None,
-                add_special_tokens=True,
-                max_length=max_length,
-            )
-            input_ids = torch.tensor(inputs["input_ids"]).unsqueeze(0).to("cuda")
-            seq_len = input_ids.size(1)
-            temp_prob = tgt_model(input_ids)[0].squeeze()
-            feature.query_length += 1
-            temp_prob = torch.softmax(temp_prob, -1)
-            temp_label = torch.argmax(temp_prob)
-            # Success
-            if temp_label != orig_label:
-                feature.num_changes += 1
-                final_words[top_index[0]] = substitute
-                feature.changes.append([keys[top_index[0]][0], substitute, tgt_word])
-                feature.final_text = temp_text
-                feature.success_indication = SuccessIndicator.attack_success
-
-                return feature
-            else:
-
-                label_prob = temp_prob[orig_label]
-                gap = current_prob - label_prob
-                if gap > most_gap:
-                    most_gap = gap
-                    candidate = substitute
-
-        if most_gap > 0:
-            feature.num_changes += 1
-            feature.changes.append([keys[top_index[0]][0], candidate, tgt_word])
-            current_prob = current_prob - most_gap
-            final_words[top_index[0]] = candidate
-
-    feature.final_text = tokenizer.convert_tokens_to_string(final_words)
-    feature.success_indication = SuccessIndicator.attack_fail
-    return feature
-
-def run_attack(processor, example, feature, pretrained_model, finetuned_model):
+def run_attack(args, processor, example, feature, pretrained_model, finetuned_model):
     output = OutputFeatures(label_id=example.label, first_seq=example.first_seq)
 
     with torch.no_grad():
@@ -174,55 +60,147 @@ def run_attack(processor, example, feature, pretrained_model, finetuned_model):
         )[0]
         word_predictions = pretrained_model(feature.input_ids)[0].detach()
     
-    pred_logit = logit.detach()
-    pred_label = torch.argmax(pred_logit, dim=1).flatten()
-    current_prob = pred_logit.max()
+    pred_logit = logit.detach() # orig prob -> pred logit 으로 변경
+    pred_label = torch.argmax(pred_logit, dim=1).flatten() # orig label -> pred label 으로 변경
+    current_prob = pred_logit.max() 
 
     if pred_label != feature.label_id:
         output.success_indication = SuccessIndicator.predict_fail
         return output
     
-    
-    sub_words = ["[CLS]"] + sub_words[: max_length - 2] + ["[SEP]"]
-    input_ids_ = torch.tensor([tokenizer.convert_tokens_to_ids(sub_words)])
-    word_predictions = mlm_model(input_ids_.to("cuda"))[
-        0
-    ].squeeze()  # seq-len(sub) vocab.
-    word_pred_scores_all, word_predictions = torch.topk(
-        word_predictions, k, -1
+    # word prediction은 MLM 모델에서 각 토큰 당 예측 값을 뽑음
+    word_predictions = word_predictions[1:-1, :] # except  [CLS], [SEP]
+    # Top-K 개를 뽑아서 가장 높은 스코어 순으로 정렬하며, 가장 plausible 한 예측값들의 모음
+    # torch.return_types.topk(values=tensor([5., 4., 3.]), indices=tensor([4, 3, 2]))
+    word_pred_score, word_pred_idx = torch.topk(
+        word_predictions, args.top_k, -1
     )  # seq-len k  #top k prediction
+    
+    important_score = get_important_scores(processor, feature, finetuned_model, current_prob, pred_label, pred_logit, args.batch_size)
+    
+    ## important_score 다음 프로세스 (TBD)
+    # legacy code 
+    # output.query_length += int(len(words))
+    # # sort by important score
+    # list_of_index = sorted(
+    #     enumerate(important_scores), key=lambda x: x[1], reverse=True
+    # )  # sort the important score and index
+    # # print(list_of_index)
+    # # => [(59, 0.00014871359), (58, 0.00011396408), (60, 0.00010085106), .... ]      [(index, Importacne score), ....]
+    # final_words = copy.deepcopy(words)  # whole word corpus from mlm
 
-    word_predictions = word_predictions[1 : len(sub_words) + 1, :]
-    word_pred_scores_all = word_pred_scores_all[1 : len(sub_words) + 1, :]
-    get_important_scores(processor, target_features)
-    OutputFeatures.append(feat)
+    # for top_index in list_of_index:
+    #     # limit ratio of word change
+    #     if output.num_changes > int(0.4 * (len(words))):
+    #         output.success_indication = SuccessIndicator.large_change  # exceed
+    #         return output
+
+    #     tgt_word = words[top_index[0]]
+    #     if tgt_word in filter_words:
+    #         continue
+    #     if keys[top_index[0]][0] > max_length - 2:
+    #         continue
+
+    #     substitutes = word_predictions[
+    #         keys[top_index[0]][0] : keys[top_index[0]][1]
+    #     ]  # L, k
+    #     word_pred_scores = word_pred_scores_all[
+    #         keys[top_index[0]][0] : keys[top_index[0]][1]
+    #     ]
+
+    #     substitutes = get_substitues(
+    #         substitutes,
+    #         tokenizer,
+    #         mlm_model,
+    #         use_bpe,
+    #         word_pred_scores,
+    #         threshold_pred_score,
+    #     )
+
+    #     most_gap = 0.0
+    #     candidate = None
+
+    #     for substitute_ in substitutes:
+    #         substitute = substitute_
+
+    #         if substitute == tgt_word:
+    #             continue  # filter out original word
+    #         if "##" in substitute:
+    #             continue  # filter out sub-word
+
+    #         if substitute in filter_words:
+    #             continue
+    #         if substitute in w2i and tgt_word in w2i:
+    #             if cos_mat[w2i[substitute]][w2i[tgt_word]] < 0.4:
+    #                 continue
+
+    #         # Replace word and check whether the attack is successful
+    #         temp_replace = final_words
+    #         temp_replace[top_index[0]] = substitute  # replace token
+    #         temp_text = tokenizer.convert_tokens_to_string(temp_replace)
+    #         inputs = tokenizer.encode_plus(
+    #             temp_text,
+    #             None,
+    #             add_special_tokens=True,
+    #             max_length=max_length,
+    #         )
+    #         input_ids = torch.tensor(inputs["input_ids"]).unsqueeze(0).to("cuda")
+    #         seq_len = input_ids.size(1)
+    #         temp_prob = tgt_model(input_ids)[0].squeeze()
+    #         output.query_length += 1
+    #         temp_prob = torch.softmax(temp_prob, -1)
+    #         temp_label = torch.argmax(temp_prob)
+    #         # Success
+    #         if temp_label != orig_label:
+    #             output.num_changes += 1
+    #             final_words[top_index[0]] = substitute
+    #             output.changes.append([keys[top_index[0]][0], substitute, tgt_word])
+    #             output.final_text = temp_text
+    #             output.success_indication = SuccessIndicator.attack_success
+
+    #             return output
+    #         else:
+
+    #             label_prob = temp_prob[orig_label]
+    #             gap = current_prob - label_prob
+    #             if gap > most_gap:
+    #                 most_gap = gap
+    #                 candidate = substitute
+
+    #     if most_gap > 0:
+    #         output.num_changes += 1
+    #         output.changes.append([keys[top_index[0]][0], candidate, tgt_word])
+    #         current_prob = current_prob - most_gap
+    #         final_words[top_index[0]] = candidate
+
+    # output.final_text = tokenizer.convert_tokens_to_string(final_words)
+    # output.success_indication = SuccessIndicator.attack_fail
+   
+
+    print(output.num_changes, output.changes, output.query_length, output.success_indication)
+    if output.success_indication == 4:
+        print("success", end="")
+    else:
+        print("failed", end="")
+
+    return output
 
 
+@staticmethod
+def add_specific_args(
+    parser: argparse.ArgumentParser, root_dir: str
+) -> argparse.ArgumentParser:
+    parser.add_argument(
+        "--batch-size",
+        default=64,
+        type=int,
+        Required=True
+    )
+    parser.add_argument(
+        "--top-k",
+        default=32,
+        type=int,
+        Required=True
+    )
 
-with torch.no_grad():
-    for index, feature in enumerate(features[start:end]):
-        seq_a, label = feature
-        feat = Feature(seq_a, label)
-        print("\r number {:d} ".format(index) + tgt_path, end="")
-        # print(feat.seq[:100], feat.label)
-        feat = attack(
-            feat,
-            tgt_model,
-            mlm_model,
-            tokenizer,
-            k,
-            batch_size=32,
-            max_length=512,
-            cos_mat=cos_mat,
-            w2i=w2i,
-            i2w=i2w,
-            use_bpe=use_bpe,
-            threshold_pred_score=threshold_pred_score,
-        )
-
-        print(feat.num_changes, feat.changes, feat.query_length, feat.success_indication)
-        if feat.success_indication == 4:
-            print("success", end="")
-        else:
-            print("failed", end="")
-        OutputFeatures.append(feat)
+    return parser
