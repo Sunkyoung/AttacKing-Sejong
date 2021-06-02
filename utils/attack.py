@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import List
 from torch.utils.data import (DataLoader, SequentialSampler)
-from utils.dataprocessor import YnatProcessor
+from utils.dataprocessor import OutputFeatures
 import torch
 
 # feature.success = 1 : exceed ratio of word change
@@ -69,7 +69,7 @@ def attack(
 
     # original label
     inputs = tokenizer.encode_plus(
-        feature.seq,
+        feature.first_seq,
         None,
         add_special_tokens=True,
         max_length=max_length,
@@ -88,8 +88,8 @@ def attack(
     orig_label = torch.argmax(orig_probs)
     current_prob = orig_probs.max()
 
-    if orig_label != feature.label:
-        feature.success = 3
+    if orig_label != feature.label_id:
+        feature.success_indication = SuccessIndicator.predict_fail
         return feature
 
     sub_words = ["[CLS]"] + sub_words[: max_length - 2] + ["[SEP]"]
@@ -114,7 +114,7 @@ def attack(
         batch_size,
         max_length,
     )
-    feature.query += int(len(words))
+    feature.query_length += int(len(words))
     # sort by important score
     list_of_index = sorted(
         enumerate(important_scores), key=lambda x: x[1], reverse=True
@@ -125,8 +125,8 @@ def attack(
 
     for top_index in list_of_index:
         # limit ratio of word change
-        if feature.change > int(0.4 * (len(words))):
-            feature.success = 1  # exceed
+        if feature.num_changes > int(0.4 * (len(words))):
+            feature.success_indication = SuccessIndicator.large_change  # exceed
             return feature
 
         tgt_word = words[top_index[0]]
@@ -181,16 +181,16 @@ def attack(
             input_ids = torch.tensor(inputs["input_ids"]).unsqueeze(0).to("cuda")
             seq_len = input_ids.size(1)
             temp_prob = tgt_model(input_ids)[0].squeeze()
-            feature.query += 1
+            feature.query_length += 1
             temp_prob = torch.softmax(temp_prob, -1)
             temp_label = torch.argmax(temp_prob)
             # Success
             if temp_label != orig_label:
-                feature.change += 1
+                feature.num_changes += 1
                 final_words[top_index[0]] = substitute
                 feature.changes.append([keys[top_index[0]][0], substitute, tgt_word])
-                feature.final_adverse = temp_text
-                feature.success = 4
+                feature.final_text = temp_text
+                feature.success_indication = SuccessIndicator.attack_success
 
                 return feature
             else:
@@ -202,13 +202,13 @@ def attack(
                     candidate = substitute
 
         if most_gap > 0:
-            feature.change += 1
+            feature.num_changes += 1
             feature.changes.append([keys[top_index[0]][0], candidate, tgt_word])
             current_prob = current_prob - most_gap
             final_words[top_index[0]] = candidate
 
-    feature.final_adverse = tokenizer.convert_tokens_to_string(final_words)
-    feature.success = 2
+    feature.final_text = tokenizer.convert_tokens_to_string(final_words)
+    feature.success_indication = SuccessIndicator.attack_fail
     return feature
 
 def run_attack(processor, target_features, mlm_model, finetuned_model):
@@ -237,9 +237,9 @@ with torch.no_grad():
             threshold_pred_score=threshold_pred_score,
         )
 
-        print(feat.changes, feat.change, feat.query, feat.success)
-        if feat.success > 2:
+        print(feat.num_changes, feat.changes, feat.query_length, feat.success_indication)
+        if feat.success_indication == 4:
             print("success", end="")
         else:
             print("failed", end="")
-        features_output.append(feat)
+        OutputFeatures.append(feat)
