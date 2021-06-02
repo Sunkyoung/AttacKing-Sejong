@@ -227,7 +227,7 @@ class YnatProcessor(DataProcessor):
     @classmethod
     def _get_masked(self, features: List[InputFeatures]) -> TensorDataset:
         masked_inputs = []
-        for i, id in enumerate(features.input_ids):
+        for i in range(len(features.input_ids)):
             masked_ids = features.input_ids
             masked_ids[i] = self.tokenizer.mask_token_id
             masked_inputs.append(masked_ids)
