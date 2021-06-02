@@ -1,6 +1,7 @@
 from enum import Enum
 from typing import List
-
+from torch.utils.data import (DataLoader, SequentialSampler)
+from utils.dataprocessor import YnatProcessor
 import torch
 
 # feature.success = 1 : exceed ratio of word change
@@ -14,53 +15,11 @@ class SuccessIndicator(Enum):
     attack_fail = 3
     attack_success = 4
 
-
-def get_masked(words: List[str]):
-    len_text = len(words)
-    masked_words = []
-    for i in range(len_text - 1):
-        masked_words.append(words[0:i] + ["[MASK]"] + words[i + 1 :])
-    # list of words
-    return masked_words
-
-
-
 def get_important_scores(processor, target_features, tgt_model, orig_prob, orig_label, orig_probs, batch_size):
-    # masked_words = _get_masked(words)
-    # texts = [" ".join(words) for words in masked_words]  # list of text of masked words
-    # all_input_ids = []
-    # all_masks = []
-    # all_segs = []
-    # # Put 0 padding to input for all texts
-    # for text in texts:
-    #     inputs = tokenizer.encode_plus(
-    #         text,
-    #         None,
-    #         add_special_tokens=True,
-    #         max_length=max_length,
-    #     )
-    #     input_ids, token_type_ids = inputs["input_ids"], inputs["token_type_ids"]
-    #     attention_mask = [1] * len(input_ids)
-    #     padding_length = max_length - len(input_ids)
-    #     input_ids = input_ids + (padding_length * [0])
-    #     token_type_ids = token_type_ids + (padding_length * [0])
-    #     attention_mask = attention_mask + (padding_length * [0])
-    #     all_input_ids.append(input_ids)
-    #     all_masks.append(attention_mask)
-    #     all_segs.append(token_type_ids)
-    # seqs = torch.tensor(all_input_ids, dtype=torch.long)
-    # masks = torch.tensor(all_masks, dtype=torch.long)
-    # segs = torch.tensor(all_segs, dtype=torch.long)
-    # seqs = seqs.to("cuda")
-
     masked_features = processor._get_masked(target_features)
     eval_sampler = SequentialSampler(masked_features)
     eval_dataloader = DataLoader(masked_features, sampler=eval_sampler, batch_size=batch_size)
 
-    # eval_data = TensorDataset(seqs)
-    # # Run prediction for full data
-    # eval_sampler = SequentialSampler(eval_data)
-    # eval_dataloader = DataLoader(eval_data, sampler=eval_sampler, batch_size=batch_size)
     leave_1_probs = []
     with torch.no_grad():
         for batch in eval_dataloader:
@@ -252,8 +211,9 @@ def attack(
     feature.success = 2
     return feature
 
+def run_attack(processor, target_features, mlm_model, finetuned_model):
+    get_important_scores(processor, target_features)
 
-target_features = processor.get_dev_data(args.data_dir)
 
 
 with torch.no_grad():

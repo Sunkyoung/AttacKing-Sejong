@@ -1,10 +1,10 @@
 import argparse
 import os
 
-from data.dataprocessor import YnatProcessor
+from utils.dataprocessor import YnatProcessor
+from utils.attack import run_attack
 from transformers import (AutoConfig, AutoModel, AutoModelForMaskedLM,
                           AutoTokenizer)
-
 
 def add_general_args(
     parser: argparse.ArgumentParser, root_dir: str
@@ -38,7 +38,7 @@ def main(args):
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     processor = YnatProcessor(args, tokenizer)
 
-    target_data = processor.get_target_data(args.data_dir)
+    target_features = processor.get_target_data(args.data_dir)
     num_labels = len(processor.get_labels())
 
     mlm_config = AutoConfig.from_pretrained(model_name)
@@ -52,6 +52,7 @@ def main(args):
     )
     finetuned_model.to("cuda")
 
+    run_attack(processor, target_features, mlm_model, finetuned_model)
 
 if __name__ == "__main__":
     main()
