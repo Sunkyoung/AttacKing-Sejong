@@ -1,7 +1,6 @@
 import argparse
 import torch
 
-from enum import Enum
 from torch.utils.data import (DataLoader, SequentialSampler)
 from utils.dataprocessor import OutputFeatures
 
@@ -9,12 +8,6 @@ from utils.dataprocessor import OutputFeatures
 # feature.success = 2 : Fail to attack
 # feature.success = 3 : Origin prediction Fail
 # feature.success = 4 : attack success with substitutes
-
-class SuccessIndicator(Enum):
-    large_change = 1
-    predict_fail = 2
-    attack_fail = 3
-    attack_success = 4
 
 def get_important_scores(processor, target_features, tgt_model, current_prob, orig_label, pred_logit, batch_size):
     masked_features = processor._get_masked(target_features)
@@ -65,7 +58,7 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
     current_prob = pred_logit.max() 
 
     if pred_label != feature.label_id:
-        output.success_indication = SuccessIndicator.predict_fail
+        output.success_indication = 'Predict fail'
         return output
     
     # word prediction은 MLM 모델에서 각 토큰 당 예측 값을 뽑음
@@ -91,8 +84,8 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
 
     # for top_index in list_of_index:
     #     # limit ratio of word change
-    #     if output.num_changes > int(0.4 * (len(words))):
-    #         output.success_indication = SuccessIndicator.large_change  # exceed
+    #     if output.num_changes > int(args.change_ratio_limit * (len(words))):
+    #         output.success_indication = 'exceed change ratio limit'  # exceed
     #         return output
 
     #     tgt_word = words[top_index[0]]
@@ -168,13 +161,13 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
     #                 candidate = substitute
 
     #     if most_gap > 0:
-    #         output.num_changes += 1
-    #         output.changes.append([keys[top_index[0]][0], candidate, tgt_word])
+    #         feature.num_changes += 1
+    #         feature.changes.append([keys[top_index[0]][0], candidate, tgt_word])
     #         current_prob = current_prob - most_gap
     #         final_words[top_index[0]] = candidate
 
-    # output.final_text = tokenizer.convert_tokens_to_string(final_words)
-    # output.success_indication = SuccessIndicator.attack_fail
+    # feature.final_text = tokenizer.convert_tokens_to_string(final_words)
+    # feature.success_indication = SuccessIndicator.attack_fail
    
 
     print(output.num_changes, output.changes, output.query_length, output.success_indication)
@@ -193,14 +186,17 @@ def add_specific_args(
     parser.add_argument(
         "--batch-size",
         default=64,
-        type=int,
-        Required=True
+        type=int
     )
     parser.add_argument(
         "--top-k",
         default=32,
-        type=int,
-        Required=True
+        type=int
+    )
+    parser.add_argument(
+        "--change_ratio_limit",
+        default=0.5,
+        type=float
     )
 
     return parser
