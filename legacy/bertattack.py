@@ -18,8 +18,7 @@ import copy
 import numpy as np
 from timeit import default_timer as timer
 from datetime import timedelta
-from data.tokenization import FullTokenizer
-from data.preprocessing import NsmcProcessor
+
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -264,6 +263,7 @@ return : feature that succeeded in attack
 def attack(feature, tgt_model, mlm_model, tokenizer, k, batch_size, max_length=512, cos_mat=None, w2i={}, i2w={}, use_bpe=1, threshold_pred_score=0.3):
     # MLM-process
     words, sub_words, keys = _tokenize(feature.seq, tokenizer)
+    words = sequence.tokenize()
     morphemes = tokenizer.tokenize()
 
     # original label
@@ -282,6 +282,8 @@ def attack(feature, tgt_model, mlm_model, tokenizer, k, batch_size, max_length=5
     if orig_label != feature.label:
         feature.success = 3
         return feature
+
+   
 
     sub_words = ['[CLS]'] + sub_words[:max_length - 2] + ['[SEP]']
     input_ids_ = torch.tensor([tokenizer.convert_tokens_to_ids(sub_words)])
@@ -539,7 +541,7 @@ def run_attack():
     mlm_model = BertForMaskedLM.from_pretrained(mlm_path, config=config_atk)
     mlm_model.to('cuda')
 
-    config_tgt = BertConfig.from_pretrained(tgt_path, num_labels=num_label)
+    
     tgt_model = BertForSequenceClassification.from_pretrained(tgt_path, config=config_tgt)
     tgt_model.to('cuda')
 
