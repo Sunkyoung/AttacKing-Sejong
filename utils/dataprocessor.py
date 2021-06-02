@@ -37,7 +37,7 @@ class InputFeatures(object):
 
 
 class OutputFeatures(object):
-    def __init__(self, label_id: int, first_seq: str, second_seq: str = None):
+    def __init__(self, label_id: int, first_seq: str, second_seq: Optional[str]= None):
         self.label_id = label_id
         self.first_seq = first_seq
         self.second_seq = second_seq
