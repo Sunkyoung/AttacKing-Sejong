@@ -4,11 +4,6 @@ import torch
 from torch.utils.data import (DataLoader, SequentialSampler)
 from utils.dataprocessor import OutputFeatures
 
-# feature.success = 1 : exceed ratio of word change
-# feature.success = 2 : Fail to attack
-# feature.success = 3 : Origin prediction Fail
-# feature.success = 4 : attack success with substitutes
-
 def get_important_scores(processor, target_features, tgt_model, current_prob, orig_label, pred_logit, batch_size):
     masked_features = processor._get_masked(target_features)
     eval_sampler = SequentialSampler(masked_features)
@@ -149,7 +144,7 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
     #             final_words[top_index[0]] = substitute
     #             output.changes.append([keys[top_index[0]][0], substitute, tgt_word])
     #             output.final_text = temp_text
-    #             output.success_indication = SuccessIndicator.attack_success
+    #             output.success_indication = 'Attack success'
 
     #             return output
     #         else:
@@ -167,14 +162,9 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
     #         final_words[top_index[0]] = candidate
 
     # feature.final_text = tokenizer.convert_tokens_to_string(final_words)
-    # feature.success_indication = SuccessIndicator.attack_fail
+    # feature.success_indication = 'Attack fail'
    
-
     print(output.num_changes, output.changes, output.query_length, output.success_indication)
-    if output.success_indication == 4:
-        print("success", end="")
-    else:
-        print("failed", end="")
 
     return output
 
