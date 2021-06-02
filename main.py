@@ -1,29 +1,40 @@
 import argparse
-import os
 import json
+import os
 
-from utils.dataprocessor import YnatProcessor
-from utils.attack import run_attack
 from transformers import (AutoConfig, AutoModel, AutoModelForMaskedLM,
                           AutoTokenizer)
 
+from utils import attack
+from utils.attack import run_attack
+from utils.dataprocessor import YnatProcessor
+
+
 def dump_features(features, output_dir):
-    output_file = 'attacked_result.json'
+    output_file = "attacked_result.json"
     outputs = []
     for feature in features:
-        outputs.append({
-                        'success_indication': feature.success_indication,
-                        'target_sequence': feature.first_seq,
-                        'num_tokens': len(feature.first_seq.split(' ')),
-                        'label': feature.label_id,
-                        'query_length': feature.query_length,
-                        'num_changes': feature.num_changes,
-                        'changes': feature.changes,
-                        'attacked_text': feature.final_text,
-                        })
-    json.dump(outputs, open(os.join.dir(output_dir, output_file), 'w'), indent=4, ensure_ascii=False)
+        outputs.append(
+            {
+                "success_indication": feature.success_indication,
+                "target_sequence": feature.first_seq,
+                "num_tokens": len(feature.first_seq.split(" ")),
+                "label": feature.label_id,
+                "query_length": feature.query_length,
+                "num_changes": feature.num_changes,
+                "changes": feature.changes,
+                "attacked_text": feature.final_text,
+            }
+        )
+    json.dump(
+        outputs,
+        open(os.join.dir(output_dir, output_file), "w"),
+        indent=4,
+        ensure_ascii=False,
+    )
 
-    print('Finished dump')
+    print("Finished dump")
+
 
 def add_general_args(
     parser: argparse.ArgumentParser, root_dir: str
@@ -51,6 +62,7 @@ def main(args):
     parser = argparse.ArgumentParser()
     parser = add_general_args(parser, os.getcwd())
     parser = YnatProcessor.add_specific_args(parser, os.getcwd())
+    parser = attack.add_specific_args(parser, os.getcwd())
     args = parser.parse_args()
 
     model_name = "klue/bert-base"
@@ -61,7 +73,9 @@ def main(args):
     num_labels = len(processor.get_labels())
 
     pretrained_config = AutoConfig.from_pretrained(model_name)
-    pretrained_model = AutoModelForMaskedLM.from_pretrained(model_name, config=pretrained_config)
+    pretrained_model = AutoModelForMaskedLM.from_pretrained(
+        model_name, config=pretrained_config
+    )
     pretrained_model.to("cuda")
 
     finetuned_config = AutoConfig.from_pretrained(model_name, num_labels=num_labels)
@@ -73,9 +87,11 @@ def main(args):
 
     output_features = []
     for example, feature in zip(target_examples, target_features):
-        output = run_attack(processor, example, feature, pretrained_model, finetuned_model)
+        output = run_attack(
+            args, processor, example, feature, pretrained_model, finetuned_model
+        )
         output_features.append(output)
-    
+
     dump_features(output_features, args.output_dir)
 
 

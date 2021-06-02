@@ -1,13 +1,25 @@
 import argparse
-import torch
 
-from torch.utils.data import (DataLoader, SequentialSampler)
+import torch
+from torch.utils.data import DataLoader, SequentialSampler
+
 from utils.dataprocessor import OutputFeatures
 
-def get_important_scores(processor, target_features, tgt_model, current_prob, orig_label, pred_logit, batch_size):
+
+def get_important_scores(
+    processor,
+    target_features,
+    tgt_model,
+    current_prob,
+    orig_label,
+    pred_logit,
+    batch_size,
+):
     masked_features = processor._get_masked(target_features)
     eval_sampler = SequentialSampler(masked_features)
-    eval_dataloader = DataLoader(masked_features, sampler=eval_sampler, batch_size=batch_size)
+    eval_dataloader = DataLoader(
+        masked_features, sampler=eval_sampler, batch_size=batch_size
+    )
 
     leave_1_probs = []
     with torch.no_grad():
@@ -39,6 +51,7 @@ def get_important_scores(processor, target_features, tgt_model, current_prob, or
 
     return import_scores
 
+
 def run_attack(args, processor, example, feature, pretrained_model, finetuned_model):
     output = OutputFeatures(label_id=example.label, first_seq=example.first_seq)
 
@@ -47,27 +60,37 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
             feature.input_ids, token_type_ids=None, attention_mask=feature.input_mask
         )[0]
         word_predictions = pretrained_model(feature.input_ids)[0].detach()
-    
-    pred_logit = logit.detach() # orig prob -> pred logit 으로 변경
-    pred_label = torch.argmax(pred_logit, dim=1).flatten() # orig label -> pred label 으로 변경
-    current_prob = pred_logit.max() 
+
+    pred_logit = logit.detach()  # orig prob -> pred logit 으로 변경
+    pred_label = torch.argmax(
+        pred_logit, dim=1
+    ).flatten()  # orig label -> pred label 으로 변경
+    current_prob = pred_logit.max()
 
     if pred_label != feature.label_id:
-        output.success_indication = 'Predict fail'
+        output.success_indication = "Predict fail"
         return output
-    
+
     # word prediction은 MLM 모델에서 각 토큰 당 예측 값을 뽑음
-    word_predictions = word_predictions[1:-1, :] # except  [CLS], [SEP]
+    word_predictions = word_predictions[1:-1, :]  # except  [CLS], [SEP]
     # Top-K 개를 뽑아서 가장 높은 스코어 순으로 정렬하며, 가장 plausible 한 예측값들의 모음
     # torch.return_types.topk(values=tensor([5., 4., 3.]), indices=tensor([4, 3, 2]))
     word_pred_score, word_pred_idx = torch.topk(
         word_predictions, args.top_k, -1
     )  # seq-len k  #top k prediction
-    
-    important_score = get_important_scores(processor, feature, finetuned_model, current_prob, pred_label, pred_logit, args.batch_size)
-    
-    ## important_score 다음 프로세스 (TBD)
-    # legacy code 
+
+    important_score = get_important_scores(
+        processor,
+        feature,
+        finetuned_model,
+        current_prob,
+        pred_label,
+        pred_logit,
+        args.batch_size,
+    )
+
+    # important_score 다음 프로세스 (TBD)
+    # legacy code
     # output.query_length += int(len(words))
     # # sort by important score
     # list_of_index = sorted(
@@ -163,8 +186,13 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
 
     # feature.final_text = tokenizer.convert_tokens_to_string(final_words)
     # feature.success_indication = 'Attack fail'
-   
-    print(output.num_changes, output.changes, output.query_length, output.success_indication)
+
+    print(
+        output.num_changes,
+        output.changes,
+        output.query_length,
+        output.success_indication,
+    )
 
     return output
 
@@ -173,20 +201,8 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
 def add_specific_args(
     parser: argparse.ArgumentParser, root_dir: str
 ) -> argparse.ArgumentParser:
-    parser.add_argument(
-        "--batch-size",
-        default=64,
-        type=int
-    )
-    parser.add_argument(
-        "--top-k",
-        default=32,
-        type=int
-    )
-    parser.add_argument(
-        "--change_ratio_limit",
-        default=0.5,
-        type=float
-    )
+    parser.add_argument("--batch-size", default=64, type=int)
+    parser.add_argument("--top-k", default=32, type=int)
+    parser.add_argument("--change_ratio_limit", default=0.5, type=float)
 
     return parser
