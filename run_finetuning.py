@@ -6,7 +6,7 @@ import numpy as np
 
 import torch
 import torch.nn as nn
-from torch.utils.data import (DataLoader, RandomSampler, SequentialSampler,)
+from torch.utils.data import (DataLoader, RandomSampler, SequentialSampler)
 from transformers import (AdamW, AutoModelForSequenceClassification,
                           AutoTokenizer, get_linear_schedule_with_warmup)
 
