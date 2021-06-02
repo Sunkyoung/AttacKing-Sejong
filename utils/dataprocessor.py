@@ -37,7 +37,7 @@ class InputFeatures(object):
 
 
 class OutputFeatures(object):
-    def __init__(self, label_id: int, first_seq: str, second_seq: Optional[str]= None):
+    def __init__(self, label_id: int, first_seq: str, second_seq: Optional[str] = None):
         self.label_id = label_id
         self.first_seq = first_seq
         self.second_seq = second_seq
@@ -231,7 +231,7 @@ class YnatProcessor(DataProcessor):
             masked_ids = features.input_ids
             masked_ids[i] = self.tokenizer.mask_token_id
             masked_inputs.append(masked_ids)
-        
+
         return self._convert_to_tensordata(features)
 
     @overrides
