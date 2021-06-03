@@ -24,7 +24,7 @@ def get_important_scores(
     leave_1_probs = []
     with torch.no_grad():
         for batch in eval_dataloader:
-            masked_input, _, _ = batch
+            masked_input = batch.to('cuda')
             # bs = masked_input.size(0)
             leave_1_prob_batch = tgt_model(masked_input)[0]  # B num-label
             leave_1_probs.append(leave_1_prob_batch)
@@ -57,9 +57,9 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
 
     with torch.no_grad():
         logit = finetuned_model(
-            feature.input_ids, token_type_ids=None, attention_mask=feature.input_mask
+            feature.input_ids.to('cuda'), token_type_ids=None, attention_mask=feature.input_mask.to('cuda')
         )[0]
-        word_predictions = pretrained_model(feature.input_ids)[0].detach()
+        word_predictions = pretrained_model(feature.input_ids.to('cuda'))[0].detach()
 
     pred_logit = logit.detach()  # orig prob -> pred logit 으로 변경
     pred_label = torch.argmax(
