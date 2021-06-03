@@ -208,7 +208,7 @@ class YnatProcessor(DataProcessor):
     def get_labels(self) -> List[str]:
         return ["정치", "사회", "경제", "세계", "생활문화", "IT과학", "스포츠"]
 
-    def get_features(self, examples) -> TensorDataset:
+    def get_features(self, examples) -> List[InputFeatures]:
         return self.convert_examples_to_features(
             examples,
             self.get_labels(),
@@ -285,7 +285,7 @@ class YnatProcessor(DataProcessor):
                 )
             )
 
-        return self._convert_to_tensordata(features)
+        return features
 
     @overrides
     def _convert_to_tensordata(self, features: List[InputFeatures]) -> TensorDataset:
