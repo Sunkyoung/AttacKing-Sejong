@@ -231,7 +231,8 @@ class YnatProcessor(DataProcessor):
             masked_ids = feature.input_ids
             masked_ids[i] = self.tokenizer.mask_token_id
             masked_inputs.append(masked_ids)
-        return self._convert_to_tensordata(feature)
+        masked_input_ids = torch.tensor([mask_input_ids for mask_input_ids in masked_inputs], dtype=torch.long)
+        return TensorDataset(masked_input_ids)
 
     @overrides
     def _convert_examples_to_features(
