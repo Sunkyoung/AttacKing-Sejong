@@ -217,6 +217,9 @@ class YnatProcessor(DataProcessor):
             self.args.whitespace_tokenize,
         )
 
+    def get_tensor(self, feature) -> TensorDataset:
+        return self._convert_to_tensordata(feature)
+
     def _create_examples(self, data):
         examples = []
         for d in data:
@@ -231,8 +234,7 @@ class YnatProcessor(DataProcessor):
             masked_ids = feature.input_ids
             masked_ids[i] = self.tokenizer.mask_token_id
             masked_inputs.append(masked_ids)
-        masked_input_ids = torch.tensor([mask_input_ids for mask_input_ids in masked_inputs], dtype=torch.long)
-        return TensorDataset(masked_input_ids)
+        return self._convert_to_tensordata(masked_inputs)
 
     @overrides
     def _convert_examples_to_features(
@@ -288,15 +290,9 @@ class YnatProcessor(DataProcessor):
         return features
 
     @overrides
-    def _convert_to_tensordata(self, features: List[InputFeatures]) -> TensorDataset:
+    def _convert_to_tensordata(self, feature) -> torch.tensor:
         """ Convert to Tensors and build dataset """
-        all_input_ids = torch.tensor([f.input_ids for f in features], dtype=torch.long)
-        all_input_mask = torch.tensor(
-            [f.input_mask for f in features], dtype=torch.long
-        )
-        all_label_ids = torch.tensor([f.label_id for f in features], dtype=torch.float)
-
-        return TensorDataset(all_input_ids, all_input_mask, all_label_ids)
+        return torch.tensor([ f for f in feature ], dtype=torch.long)
 
     @staticmethod
     def add_specific_args(
