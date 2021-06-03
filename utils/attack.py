@@ -54,12 +54,13 @@ def get_important_scores(
 
 def run_attack(args, processor, example, feature, pretrained_model, finetuned_model):
     output = OutputFeatures(label_id=example.label, first_seq=example.first_seq)
-
+    input_tensor = processor.get_tensor(feature.input_ids).to('cuda')
+    input_mask_tensor = processor.get_tensor(feature.input_mask).to('cuda')
     with torch.no_grad():
         logit = finetuned_model(
-            feature.input_ids.to('cuda'), token_type_ids=None, attention_mask=feature.input_mask.to('cuda')
+            input_tensor, token_type_ids=None, attention_mask=input_mask_tensor
         )[0]
-        word_predictions = pretrained_model(feature.input_ids.to('cuda'))[0].detach()
+        word_predictions = pretrained_model(input_tensor)[0].detach()
 
     pred_logit = logit.detach()  # orig prob -> pred logit 으로 변경
     pred_label = torch.argmax(
