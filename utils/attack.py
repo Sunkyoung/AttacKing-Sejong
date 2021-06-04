@@ -109,11 +109,16 @@ def replacement_using_BERT(feature, current_prob, output,pred_label, word_index_
             temp_replace = final_words
             temp_replace[top_index+1] = substitute # replace token
 
-            input_ids = torch.tensor(temp_replace)
-            temp_prob = tgt_model(input_ids)[0].squeeze()
+
+            input_tensor = processor.get_tensor(temp_replace).to('cuda')    
+
+            with torch.no_grad():       
+                logit = finetuned_model(input_tensor)[0] 
+            temp_logit= logit.detach() 
+            temp_prob = torch.softmax(temp_logit, -1) 
+            temp_label = torch.argmax(temp_logit, dim=1).flatten()  
+
             feature.query += 1
-            temp_prob = torch.softmax(temp_prob, -1)
-            temp_label = torch.argmax(temp_prob)
 
             #Success
             if temp_label != pred_label:
