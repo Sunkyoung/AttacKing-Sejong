@@ -51,7 +51,7 @@ def get_important_scores(
 
     return import_scores
 
-def replacement_using_BERT(feature, current_prob, output,pred_label, word_index_with_I_score, processor, word_predictions, word_pred_scores_all, threshold_pred_score = 3.0):
+def replacement_using_BERT(feature, current_prob, output,pred_label, word_index_with_I_score, processor, word_pred_idx, word_pred_scores_all, threshold_pred_score = 3.0):
     
     final_words = copy.deepcopy(feature.input_ids) # tokenized word ids include CLS, SEP 
 
@@ -73,7 +73,7 @@ def replacement_using_BERT(feature, current_prob, output,pred_label, word_index_
             continue
         ############################
         
-        substitutes = word_predictions[top_index].unsqueeze(0)  # L, k
+        substitutes = word_pred_idx[top_index].unsqueeze(0)  # L, k
         word_pred_scores = word_pred_scores_all[top_index].unsqueeze(0)
 
         ###############################
@@ -203,7 +203,7 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
     word_predictions = word_predictions[1:-1, :]  # except  [CLS], [SEP]
     # Top-K 개를 뽑아서 가장 높은 스코어 순으로 정렬하며, 가장 plausible 한 예측값들의 모음
     # torch.return_types.topk(values=tensor([5., 4., 3.]), indices=tensor([4, 3, 2]))
-    word_pred_scores_all, word_predictions = torch.topk(
+    word_pred_scores_all, word_pred_idx = torch.topk(
         word_predictions, args.top_k, -1
     )  # seq-len k  #top k prediction
 
@@ -234,7 +234,7 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
                            output,pred_label, 
                            word_index_with_I_score, 
                            processor, 
-                           word_predictions, 
+                           word_pred_idx, 
                            word_pred_scores_all, 
                            args.threshold_pred_score)
     
