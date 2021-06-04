@@ -51,6 +51,128 @@ def get_important_scores(
 
     return import_scores
 
+def replacement_using_BERT(feature, current_prob, output,pred_label, word_index_with_I_score, processor, word_predictions, word_pred_scores_all, threshold_pred_score = 3.0):
+    
+    final_words = copy.deepcopy(feature.input_ids) # tokenized word ids include CLS, SEP 
+
+    for top_index , important_score in word_index_with_I_score:
+        # limit ratio of word change
+        if output.num_changes > int(args.change_ratio_limit * (len(final_words)-2)):
+            output.success_indication = 'exceed change ratio limit'  # exceed
+            return output
+
+        tgt_word = feature.input_ids[top_index+1] #because of CLS, need to +1 
+
+        #no filter words #####
+        #if tgt_word in filter_words:
+        #    continue
+        ############################
+        ##  Maybe useless ##########
+        ############################
+        if top_index > args.max_seq_length - 2:
+            continue
+        ############################
+        
+        substitutes = word_predictions[top_index].unsqueeze(0)  # L, k
+        word_pred_scores = word_pred_scores_all[top_index].unsqueeze(0)
+
+        ###############################
+        ####  Can be depreciated  #####
+        ###############################
+        substitutes = get_substitues(
+            substitutes,
+            word_pred_scores,
+            threshold_pred_score,
+        )
+        ################################
+        most_gap = 0.0
+        candidate = None
+
+        for substitute_ in substitutes:
+            substitute = substitute_
+
+            if substitute == tgt_word:
+                continue  # filter out original word
+            '''        
+            if '##' in substitute:
+                continue  # filter out sub-word
+            '''
+            if substitute in filter_words:
+                continue
+            '''
+            if substitute in w2i and tgt_word in w2i:
+                if cos_mat[w2i[substitute]][w2i[tgt_word]] < 0.4:
+                    continue
+            '''
+
+            #Replace word and check whether the attack is successful
+            temp_replace = final_words
+            temp_replace[top_index+1] = substitute # replace token
+
+            input_ids = torch.tensor(temp_replace)
+            temp_prob = tgt_model(input_ids)[0].squeeze()
+            feature.query += 1
+            temp_prob = torch.softmax(temp_prob, -1)
+            temp_label = torch.argmax(temp_prob)
+
+            #Success
+            if temp_label != pred_label:
+                output.num_changes += 1
+              
+                ####### ids_to_token & tokens_to_string######
+                ########  may be converted to function ######
+                substitute_token = processor.tokenizer.convert_ids_to_token(substitute)
+                tgt_word_token = processor.tokenizer.convert_ids_to_token(tgt_word)
+                output.changes.append([top_index, substitute_token, tgt_word_token])
+                #############################################
+                temp_replace_token = processor.tokenizer.convert_ids_to_token(temp_replace)
+                temp_text = processor.tokenizer.convert_tokens_to_string(temp_replace_token)
+                ##############################################
+
+                output.final_text = temp_text
+                output.success_indication = "Attack success"
+                
+                return
+            else:
+
+                label_prob = temp_prob[pred_label]
+                gap = current_prob - label_prob
+                if gap > most_gap:
+                    most_gap = gap
+                    candidate = substitute
+
+        if most_gap > 0:
+            output.num_changes += 1
+            ####### ids_to_token & tokens_to_string######
+            candidate_token = processor.tokenizer.convert_ids_to_token(candidate)
+            tgt_word_token = processor.tokenizer.convert_ids_to_token(tgt_word)
+            output.changes.append([top_index, candidate_token, tgt_word_token])
+            #############################################
+
+            current_prob = current_prob - most_gap
+            final_words[top_index+1] = candidate
+
+    final_words_token = processor.tokenizer.convert_ids_to_token(final_words)
+    final_text = processor.tokenizer.convert_tokens_to_string(final_words_token)
+    output.final_adverse = final_text
+    output.success_indication = 'Attack fail'
+    return  
+
+
+def get_substitues(substitutes, substitutes_score=None, threshold=3.0):
+    # substitues L,k
+    words = []
+    sub_len, k = substitutes.size() #sub_len : # of subwords
+    # Empty list (no substitution)
+    if sub_len == 0:
+        return words
+    # Single word, choose word which score of substitutes is higher than threshold   
+    for (substitute , I_score) in zip(substitutes[0], substitutes_score[0]):
+        if threshold != 0 and I_score < threshold:
+            break
+        words.append(substitute)
+    # return the ids that I_score exceed the threshold
+    return words
 
 def run_attack(args, processor, example, feature, pretrained_model, finetuned_model):
     output = OutputFeatures(label_id=example.label, first_seq=example.first_seq)
@@ -76,7 +198,7 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
     word_predictions = word_predictions[1:-1, :]  # except  [CLS], [SEP]
     # Top-K 개를 뽑아서 가장 높은 스코어 순으로 정렬하며, 가장 plausible 한 예측값들의 모음
     # torch.return_types.topk(values=tensor([5., 4., 3.]), indices=tensor([4, 3, 2]))
-    word_pred_score, word_pred_idx = torch.topk(
+    word_pred_scores_all, word_predictions = torch.topk(
         word_predictions, args.top_k, -1
     )  # seq-len k  #top k prediction
 
@@ -90,103 +212,27 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
         args.batch_size,
     )
 
-    # important_score 다음 프로세스 (TBD)
+    ##########################################
+    # important_score 다음 프로세스 (TBD)#########
+    ##########################################
     # legacy code
-    # output.query_length += int(len(words))
-    # # sort by important score
-    # list_of_index = sorted(
-    #     enumerate(important_scores), key=lambda x: x[1], reverse=True
-    # )  # sort the important score and index
-    # # print(list_of_index)
-    # # => [(59, 0.00014871359), (58, 0.00011396408), (60, 0.00010085106), .... ]      [(index, Importacne score), ....]
-    # final_words = copy.deepcopy(words)  # whole word corpus from mlm
+    output.query_length += int(len(words))
+    # sort by important score
+    word_index_with_I_score= sorted(
+        enumerate(important_scores), key=lambda x: x[1], reverse=True
+        )  # sort the important score and index
+    # print(list_of_index)
+    #=> [(59, 0.00014871359), (58, 0.00011396408), (60, 0.00010085106), .... ]      [(index, Importacne score), ....]
 
-    # for top_index in list_of_index:
-    #     # limit ratio of word change
-    #     if output.num_changes > int(args.change_ratio_limit * (len(words))):
-    #         output.success_indication = 'exceed change ratio limit'  # exceed
-    #         return output
-
-    #     tgt_word = words[top_index[0]]
-    #     if tgt_word in filter_words:
-    #         continue
-    #     if keys[top_index[0]][0] > max_length - 2:
-    #         continue
-
-    #     substitutes = word_predictions[
-    #         keys[top_index[0]][0] : keys[top_index[0]][1]
-    #     ]  # L, k
-    #     word_pred_scores = word_pred_scores_all[
-    #         keys[top_index[0]][0] : keys[top_index[0]][1]
-    #     ]
-
-    #     substitutes = get_substitues(
-    #         substitutes,
-    #         tokenizer,
-    #         mlm_model,
-    #         use_bpe,
-    #         word_pred_scores,
-    #         threshold_pred_score,
-    #     )
-
-    #     most_gap = 0.0
-    #     candidate = None
-
-    #     for substitute_ in substitutes:
-    #         substitute = substitute_
-
-    #         if substitute == tgt_word:
-    #             continue  # filter out original word
-    #         if "##" in substitute:
-    #             continue  # filter out sub-word
-
-    #         if substitute in filter_words:
-    #             continue
-    #         if substitute in w2i and tgt_word in w2i:
-    #             if cos_mat[w2i[substitute]][w2i[tgt_word]] < 0.4:
-    #                 continue
-
-    #         # Replace word and check whether the attack is successful
-    #         temp_replace = final_words
-    #         temp_replace[top_index[0]] = substitute  # replace token
-    #         temp_text = tokenizer.convert_tokens_to_string(temp_replace)
-    #         inputs = tokenizer.encode_plus(
-    #             temp_text,
-    #             None,
-    #             add_special_tokens=True,
-    #             max_length=max_length,
-    #         )
-    #         input_ids = torch.tensor(inputs["input_ids"]).unsqueeze(0).to("cuda")
-    #         seq_len = input_ids.size(1)
-    #         temp_prob = tgt_model(input_ids)[0].squeeze()
-    #         output.query_length += 1
-    #         temp_prob = torch.softmax(temp_prob, -1)
-    #         temp_label = torch.argmax(temp_prob)
-    #         # Success
-    #         if temp_label != orig_label:
-    #             output.num_changes += 1
-    #             final_words[top_index[0]] = substitute
-    #             output.changes.append([keys[top_index[0]][0], substitute, tgt_word])
-    #             output.final_text = temp_text
-    #             output.success_indication = 'Attack success'
-
-    #             return output
-    #         else:
-
-    #             label_prob = temp_prob[orig_label]
-    #             gap = current_prob - label_prob
-    #             if gap > most_gap:
-    #                 most_gap = gap
-    #                 candidate = substitute
-
-    #     if most_gap > 0:
-    #         feature.num_changes += 1
-    #         feature.changes.append([keys[top_index[0]][0], candidate, tgt_word])
-    #         current_prob = current_prob - most_gap
-    #         final_words[top_index[0]] = candidate
-
-    # feature.final_text = tokenizer.convert_tokens_to_string(final_words)
-    # feature.success_indication = 'Attack fail'
+    replacement_using_BERT(feature, 
+                           current_prob, 
+                           output,pred_label, 
+                           word_index_with_I_score, 
+                           processor, 
+                           word_predictions, 
+                           word_pred_scores_all, 
+                           args.threshold_pred_score)
+    
 
     print(
         output.num_changes,
@@ -205,5 +251,5 @@ def add_specific_args(
     parser.add_argument("--batch-size", default=64, type=int)
     parser.add_argument("--top-k", default=32, type=int)
     parser.add_argument("--change_ratio_limit", default=0.5, type=float)
-
+    parser.add_argument("--threshold-pred-score", default=0.1, type=float)
     return parser
