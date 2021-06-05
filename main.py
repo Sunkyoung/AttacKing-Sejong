@@ -54,6 +54,12 @@ def add_general_args(
         required=True,
         help="The output directory where the model predictions and checkpoints will be written.",
     )
+    parser.add_argument(
+        "--finetuned-model-path",
+        type=str,
+        required=True,
+        help="Path of finetnued model",
+    )
 
     return parser
 
@@ -78,10 +84,11 @@ def main(args):
     )
     pretrained_model.to("cuda")
 
-    finetuned_config = AutoConfig.from_pretrained(model_name, num_labels=num_labels)
-    finetuned_model = AutoModel.from_pretrained(model_name)
+    finetuned_model_path = args.finetuned_model_path
+    finetuned_config = AutoConfig.from_pretrained(finetuned_model_path, num_labels=num_labels)
+    finetuned_model = AutoModel.from_pretrained(finetuned_model_path)
     finetuned_model = AutoModelForMaskedLM.from_pretrained(
-        model_name, config=finetuned_config
+        finetuned_model_path, config=finetuned_config
     )
     finetuned_model.to("cuda")
 
