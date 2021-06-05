@@ -220,6 +220,18 @@ class YnatProcessor(DataProcessor):
     def get_tensor(self, feature) -> TensorDataset:
         return self._convert_to_tensordata(feature)
 
+    def get_keys(self, sequence):
+        words = sequence.strip().split()
+        all_subwords = []
+        keys = []
+        start_idx = 0
+        for word in words:
+            all_subwords.extend(self.tokenizer.tokenize(word))
+            end_idx = start_idx + len(all_subwords)
+            keys.append([start_idx, end_idx])
+            start_idx = end_idx
+        return words, all_subwords, keys
+
     def _create_examples(self, data):
         examples = []
         for d in data:
@@ -293,6 +305,18 @@ class YnatProcessor(DataProcessor):
     def _convert_to_tensordata(self, feature) -> torch.tensor:
         """ Convert to Tensors and build dataset """
         return torch.tensor([ f for f in feature ], dtype=torch.long)
+
+    def convert_to_all_tensordata(self, features: List[InputFeatures]) -> TensorDataset:
+        """ Convert to Tensors and build dataset """
+        all_input_ids = torch.tensor([f.input_ids for f in features], dtype=torch.long)
+        all_input_mask = torch.tensor(
+            [f.input_mask for f in features], dtype=torch.long
+        )
+        all_label_ids = torch.tensor([f.label_id for f in features], dtype=torch.long)
+
+        return TensorDataset(
+            all_input_ids, all_input_mask, all_label_ids
+        )
 
     # @staticmethod
     def add_specific_args(
