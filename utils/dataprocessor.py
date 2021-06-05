@@ -209,7 +209,7 @@ class YnatProcessor(DataProcessor):
         return ["정치", "사회", "경제", "세계", "생활문화", "IT과학", "스포츠"]
 
     def get_features(self, examples) -> List[InputFeatures]:
-        return self.convert_examples_to_features(
+        return self._convert_examples_to_features(
             examples,
             self.get_labels(),
             self.args.max_seq_length,
