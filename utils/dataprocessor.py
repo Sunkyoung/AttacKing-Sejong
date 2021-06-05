@@ -214,7 +214,7 @@ class YnatProcessor(DataProcessor):
             self.get_labels(),
             self.args.max_seq_length,
             self.tokenizer,
-            self.args.whitespace_tokenize,
+            self.args.do_whitespace_tokenize,
         )
 
     def get_tensor(self, feature) -> TensorDataset:
