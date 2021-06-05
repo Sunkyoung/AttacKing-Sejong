@@ -4,7 +4,7 @@ import os
 from typing import List, Optional
 
 import torch
-from Overrides import overrides
+# import overrides
 from torch.utils.data import TensorDataset
 
 
@@ -150,7 +150,7 @@ class DataProcessor(object):
             all_input_ids, all_input_mask, all_segment_ids, all_label_ids
         )
 
-    @classmethod
+    # @classmethod
     def _read_txt(cls, input_file: str):
         """Reads a tab separated value file."""
         with open(input_file, "r") as f:
@@ -160,7 +160,7 @@ class DataProcessor(object):
                 data.extend(line.split("\t"))
             return data
 
-    @classmethod
+    # @classmethod
     def _read_json(cls, input_file: str):
         """Reads a tab separated value file."""
         with open(input_file, "r") as f:
@@ -227,7 +227,7 @@ class YnatProcessor(DataProcessor):
             examples.append(InputExample(guid, first_seq, label))
         return examples
 
-    @classmethod
+    # @classmethod
     def _get_masked(self, feature: TensorDataset) -> TensorDataset:
         masked_inputs = []
         for i in range(1, len(feature.input_ids)-1):
@@ -236,7 +236,7 @@ class YnatProcessor(DataProcessor):
             masked_inputs.append(masked_ids)
         return self._convert_to_tensordata(masked_inputs)
 
-    @overrides
+    # @overrides
     def _convert_examples_to_features(
         self,
         examples: List[InputExample],
@@ -289,12 +289,12 @@ class YnatProcessor(DataProcessor):
 
         return features
 
-    @overrides
+    # @overrides
     def _convert_to_tensordata(self, feature) -> torch.tensor:
         """ Convert to Tensors and build dataset """
         return torch.tensor([ f for f in feature ], dtype=torch.long)
 
-    @staticmethod
+    # @staticmethod
     def add_specific_args(
         parser: argparse.ArgumentParser, root_dir: str
     ) -> argparse.ArgumentParser:

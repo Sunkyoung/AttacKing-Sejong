@@ -198,7 +198,7 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
     return output
 
 
-@staticmethod
+# @staticmethod
 def add_specific_args(
     parser: argparse.ArgumentParser, root_dir: str
 ) -> argparse.ArgumentParser:
