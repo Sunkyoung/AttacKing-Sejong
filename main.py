@@ -54,6 +54,13 @@ def add_general_args(
         required=True,
         help="The output directory where the model predictions and checkpoints will be written.",
     )
+    parser.add_argument(
+        "--run-BertAttack-origianl",
+        default=None,
+        type=bool,
+        required=True,
+        help="if True then Attack with white space wise otherwise Attack with subword wise",
+    )
 
     return parser
 
