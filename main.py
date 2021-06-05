@@ -64,7 +64,7 @@ def add_general_args(
     return parser
 
 
-def main(args):
+def main():
     parser = argparse.ArgumentParser()
     parser = add_general_args(parser, os.getcwd())
     parser = YnatProcessor.add_specific_args(parser, os.getcwd())
