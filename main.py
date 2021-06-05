@@ -5,8 +5,7 @@ import os
 from transformers import (AutoConfig, AutoModel, AutoModelForMaskedLM,
                           AutoTokenizer)
 
-from utils import attack
-from utils.attack import run_attack
+
 from utils.dataprocessor import YnatProcessor
 
 
@@ -55,7 +54,7 @@ def add_general_args(
         help="The output directory where the model predictions and checkpoints will be written.",
     )
     parser.add_argument(
-        "--run-BertAttack-origianl",
+        "--run-BertAttack-original",
         default=None,
         type=bool,
         required=True,
@@ -71,6 +70,13 @@ def main(args):
     parser = YnatProcessor.add_specific_args(parser, os.getcwd())
     parser = attack.add_specific_args(parser, os.getcwd())
     args = parser.parse_args()
+
+    if(args.run_BertAttack_original==True):
+        from utils import attack_original as attack
+        from utils.attack_original import run_attack 
+    else:
+        from utils import attack
+        from utils.attack import run_attack
 
     model_name = "klue/bert-base"
     tokenizer = AutoTokenizer.from_pretrained(model_name)
