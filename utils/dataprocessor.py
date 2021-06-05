@@ -12,12 +12,12 @@ class InputExample(object):
     """A single example"""
 
     def __init__(
-        self, guid: str, label: str, first_seq: str, second_seq: Optional[str] = None
+        self, guid: str, first_seq: str, second_seq: Optional[str] = None, label: Optional[str] = None
     ):
         self.guid = guid
-        self.label = label
         self.first_seq = first_seq
         self.second_seq = second_seq
+        self.label = label
 
 
 class InputFeatures(object):
