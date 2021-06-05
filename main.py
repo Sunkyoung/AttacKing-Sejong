@@ -1,14 +1,14 @@
 import argparse
 import json
 import os
+import torch
 
-from transformers import (AutoConfig, AutoModel, AutoModelForMaskedLM,
+
+from transformers import (AutoConfig, AutoModel, AutoModelForMaskedLM, AutoModelForSequenceClassification,
                           AutoTokenizer)
-
 from utils import attack
 from utils.attack import run_attack
 from utils.dataprocessor import YnatProcessor
-
 
 def dump_features(features, output_dir):
     output_file = "attacked_result.json"
@@ -28,7 +28,7 @@ def dump_features(features, output_dir):
         )
     json.dump(
         outputs,
-        open(os.join.dir(output_dir, output_file), "w"),
+        open(os.path.join(output_dir, output_file), "w"),
         indent=4,
         ensure_ascii=False,
     )
@@ -84,13 +84,10 @@ def main():
     )
     pretrained_model.to("cuda")
 
-    finetuned_model_path = args.finetuned_model_path
-    finetuned_config = AutoConfig.from_pretrained(finetuned_model_path, num_labels=num_labels)
-    finetuned_model = AutoModel.from_pretrained(finetuned_model_path)
-    finetuned_model = AutoModelForMaskedLM.from_pretrained(
-        finetuned_model_path, config=finetuned_config
-    )
+    finetuned_model = AutoModelForSequenceClassification.from_pretrained(model_name,num_labels=num_labels)
     finetuned_model.to("cuda")
+    model_state, _ = torch.load(args.finetuned_model_path)
+    finetuned_model.load_state_dict(model_state, strict=False)
 
     output_features = []
     for example, feature in zip(target_examples, target_features):
