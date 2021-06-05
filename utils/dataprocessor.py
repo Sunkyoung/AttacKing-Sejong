@@ -224,7 +224,7 @@ class YnatProcessor(DataProcessor):
         examples = []
         for d in data:
             guid, first_seq, label = d
-            examples.append(InputExample(guid, first_seq, label))
+            examples.append(InputExample(guid=guid, first_seq=first_seq, label=label))
         return examples
 
     # @classmethod
