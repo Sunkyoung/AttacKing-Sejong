@@ -3,11 +3,8 @@ import json
 import os
 import torch
 
-
 from transformers import (AutoConfig, AutoModel, AutoModelForMaskedLM, AutoModelForSequenceClassification,
                           AutoTokenizer)
-from utils import attack
-from utils.attack import run_attack
 from utils.dataprocessor import YnatProcessor
 
 def dump_features(features, output_dir):
@@ -55,6 +52,20 @@ def add_general_args(
         help="The output directory where the model predictions and checkpoints will be written.",
     )
     parser.add_argument(
+        "--run-BertAttack-original",
+        default=None,
+        type=bool,
+        required=True,
+        help="If True then Attack with white space wise otherwise Attack with subword wise",
+    )
+    parser.add_argument(
+        "--use-bpe",
+        default=None,
+        type=bool,
+        required=True,
+        help="If True then use a bpe word for getting pair of subwords substitute"
+    )
+    parser.add_argument(
         "--finetuned-model-path",
         type=str,
         required=True,
@@ -70,6 +81,13 @@ def main():
     parser = YnatProcessor.add_specific_args(parser, os.getcwd())
     parser = attack.add_specific_args(parser, os.getcwd())
     args = parser.parse_args()
+
+    if(args.run_BertAttack_original==True):
+        from utils import attack_original as attack
+        from utils.attack_original import run_attack 
+    else:
+        from utils import attack
+        from utils.attack import run_attack
 
     model_name = "klue/bert-base"
     tokenizer = AutoTokenizer.from_pretrained(model_name)
