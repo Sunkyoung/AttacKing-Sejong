@@ -11,7 +11,7 @@ def get_important_scores(
     target_features,
     tgt_model,
     current_prob,
-    orig_label,
+    pred_label,
     pred_logit,
     batch_size,
 ):
@@ -35,10 +35,10 @@ def get_important_scores(
         (
             current_prob
             - leave_1_probs[
-                :, orig_label
+                :, pred_label
             ]  # Difference between original logit output and 1 masked logit output
             + (  # Add score which In case the results change.
-                leave_1_probs_argmax != orig_label
+                leave_1_probs_argmax != pred_label
             ).float()
             * (
                 leave_1_probs.max(dim=-1)[0]
@@ -68,10 +68,10 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
     pred_label = torch.argmax(
         pred_logit, dim=1
     ).flatten()  # orig label -> pred label 으로 변경
-    orig_label = torch.argmax(feature.label_id, dim=1).flatten()
+    orig_label = torch.argmax(torch.tensor(feature.label_id))
     current_prob = pred_logit.max()
 
-    if pred_label != feature.label_id:
+    if pred_label != orig_label:
         output.success_indication = "Predict fail"
         return output
 
