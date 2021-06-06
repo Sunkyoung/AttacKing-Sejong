@@ -68,6 +68,7 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
     pred_label = torch.argmax(
         pred_logit, dim=1
     ).flatten()  # orig label -> pred label 으로 변경
+    orig_label = torch.argmax(feature.label_id, dim=1).flatten()
     current_prob = pred_logit.max()
 
     if pred_label != feature.label_id:
