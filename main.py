@@ -58,7 +58,14 @@ def add_general_args(
         default=None,
         type=bool,
         required=True,
-        help="if True then Attack with white space wise otherwise Attack with subword wise",
+        help="If True then Attack with white space wise otherwise Attack with subword wise",
+    )
+    parser.add_argument(
+        "--use-bpe",
+        default=None,
+        type=bool,
+        required=True,
+        help="If True then use a bpe word for getting pair of subwords substitue"
     )
 
     return parser
