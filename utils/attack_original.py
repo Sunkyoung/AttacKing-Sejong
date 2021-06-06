@@ -161,8 +161,8 @@ def replacement_using_BERT(feature,
 
             #Replace word and check whether the attack is successful
             temp_replace = final_words
-            temp_replace[top_index+1] = substitute # replace token
-
+            temp_replace[top_index] = substitute # replace token
+            temp_text = tokenizer.
 
             input_tensor = processor.get_tensor(temp_replace).to('cuda')    
 
@@ -326,14 +326,14 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
 
     important_score = get_important_scores(
         words,
-        args,
-        processor,
+        processor.tokenizer,
         feature,
         finetuned_model,
         current_prob,
         pred_label,
         pred_logit,
         args.batch_size,
+        args.max_length
     )
 
     ##########################################
