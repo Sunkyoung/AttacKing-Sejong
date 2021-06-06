@@ -97,7 +97,7 @@ def replacement_using_BERT(feature,
                            output, 
                            pred_label, 
                            word_index_with_I_score, 
-                           processor, 
+                           tokenizer, 
                            word_pred_idx, 
                            word_pred_scores_all, 
                            threshold_pred_score = 3.0):
@@ -162,12 +162,15 @@ def replacement_using_BERT(feature,
             #Replace word and check whether the attack is successful
             temp_replace = final_words
             temp_replace[top_index] = substitute # replace token
-            temp_text = tokenizer.
+            temp_text = tokenizer.convert_tokens_to_string(temp_replace)
+            inputs = tokenizer.encode_plus(temp_text,None, add_special_tokens=True,max_length = args.max_seq_length,)
+            inputs_ids = torch.tensor(inputs["inputs_ids"]).unsqueeze(0).to('cuda')
+            seq_len = input_ids.size(1)
 
-            input_tensor = processor.get_tensor(temp_replace).to('cuda')    
+            
 
             with torch.no_grad():       
-                logit = finetuned_model(input_tensor)[0] 
+                logit = finetuned_model(input_ids)[0] 
             temp_logit= logit.detach() 
             temp_prob = torch.softmax(temp_logit, -1) 
             temp_label = torch.argmax(temp_logit, dim=1).flatten()  
@@ -177,20 +180,11 @@ def replacement_using_BERT(feature,
             #Success
             if temp_label != pred_label:
                 output.num_changes += 1
-              
-                ####### ids_to_token & tokens_to_string######
-                ########  may be converted to function ######
-                substitute_token = processor.tokenizer.convert_ids_to_token(substitute)
-                tgt_word_token = processor.tokenizer.convert_ids_to_token(tgt_word)
-                output.changes.append([top_index, substitute_token, tgt_word_token])
-                #############################################
-                temp_replace_token = processor.tokenizer.convert_ids_to_token(temp_replace)
-                temp_text = processor.tokenizer.convert_tokens_to_string(temp_replace_token)
-                ##############################################
-
-                output.final_text = temp_text
-                output.success_indication = "Attack success"
                 
+                final_words[top_index] = substitute
+                output.changes.append([keys[top_index][0], substitute, tgt_word])
+                output.final_text = temp_text
+                output.success_indication ="Attack success"
                 return
             else:
 
@@ -201,18 +195,13 @@ def replacement_using_BERT(feature,
                     candidate = substitute
 
         if most_gap > 0:
-            output.num_changes += 1
-            ####### ids_to_token & tokens_to_string######
-            candidate_token = processor.tokenizer.convert_ids_to_token(candidate)
-            tgt_word_token = processor.tokenizer.convert_ids_to_token(tgt_word)
-            output.changes.append([top_index, candidate_token, tgt_word_token])
-            #############################################
-
+            output.num_changes +=1
+            output.changes.append([keys[top_index][0], substitute, tgt_word])
             current_prob = current_prob - most_gap
-            final_words[top_index+1] = candidate
+            final_words[top_index] = candidate
 
-    final_words_token = processor.tokenizer.convert_ids_to_token(final_words)
-    final_text = processor.tokenizer.convert_tokens_to_string(final_words_token)
+    
+    final_text = tokenizer.convert_tokens_to_string(final_words)
     output.final_adverse = final_text
     output.success_indication = 'Attack fail'
     return  
@@ -357,7 +346,7 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
                            output,
                            pred_label, 
                            word_index_with_I_score, 
-                           processor, 
+                           processor.tokenizer, 
                            word_pred_idx, 
                            word_pred_scores_all, 
                            args.threshold_pred_score)
