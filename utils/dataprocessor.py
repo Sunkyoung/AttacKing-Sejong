@@ -4,7 +4,7 @@ import os
 from typing import List, Optional
 
 import torch
-from Overrides import overrides
+# import overrides
 from torch.utils.data import TensorDataset
 
 
@@ -12,12 +12,12 @@ class InputExample(object):
     """A single example"""
 
     def __init__(
-        self, guid: str, label: str, first_seq: str, second_seq: Optional[str] = None
+        self, guid: str, first_seq: str, second_seq: Optional[str] = None, label: Optional[str] = None
     ):
         self.guid = guid
-        self.label = label
         self.first_seq = first_seq
         self.second_seq = second_seq
+        self.label = label
 
 
 class InputFeatures(object):
@@ -150,7 +150,7 @@ class DataProcessor(object):
             all_input_ids, all_input_mask, all_segment_ids, all_label_ids
         )
 
-    @classmethod
+    # @classmethod
     def _read_txt(cls, input_file: str):
         """Reads a tab separated value file."""
         with open(input_file, "r") as f:
@@ -160,7 +160,7 @@ class DataProcessor(object):
                 data.extend(line.split("\t"))
             return data
 
-    @classmethod
+    # @classmethod
     def _read_json(cls, input_file: str):
         """Reads a tab separated value file."""
         with open(input_file, "r") as f:
@@ -209,25 +209,37 @@ class YnatProcessor(DataProcessor):
         return ["정치", "사회", "경제", "세계", "생활문화", "IT과학", "스포츠"]
 
     def get_features(self, examples) -> List[InputFeatures]:
-        return self.convert_examples_to_features(
+        return self._convert_examples_to_features(
             examples,
             self.get_labels(),
             self.args.max_seq_length,
             self.tokenizer,
-            self.args.whitespace_tokenize,
+            self.args.do_whitespace_tokenize,
         )
 
     def get_tensor(self, feature) -> TensorDataset:
         return self._convert_to_tensordata(feature)
 
+    def get_keys(self, sequence):
+        words = sequence.strip().split()
+        all_subwords = []
+        keys = []
+        start_idx = 0
+        for word in words:
+            all_subwords.extend(self.tokenizer.tokenize(word))
+            end_idx = start_idx + len(all_subwords)
+            keys.append([start_idx, end_idx])
+            start_idx = end_idx
+        return words, all_subwords, keys
+
     def _create_examples(self, data):
         examples = []
         for d in data:
             guid, first_seq, label = d
-            examples.append(InputExample(guid, first_seq, label))
+            examples.append(InputExample(guid=guid, first_seq=first_seq, label=label))
         return examples
 
-    @classmethod
+    # @classmethod
     def _get_masked(self, feature: TensorDataset) -> TensorDataset:
         masked_inputs = []
         for i in range(1, len(feature.input_ids)-1):
@@ -236,7 +248,7 @@ class YnatProcessor(DataProcessor):
             masked_inputs.append(masked_ids)
         return self._convert_to_tensordata(masked_inputs)
 
-    @overrides
+    # @overrides
     def _convert_examples_to_features(
         self,
         examples: List[InputExample],
@@ -289,12 +301,24 @@ class YnatProcessor(DataProcessor):
 
         return features
 
-    @overrides
+    # @overrides
     def _convert_to_tensordata(self, feature) -> torch.tensor:
         """ Convert to Tensors and build dataset """
         return torch.tensor([ f for f in feature ], dtype=torch.long)
 
-    @staticmethod
+    def convert_to_all_tensordata(self, features: List[InputFeatures]) -> TensorDataset:
+        """ Convert to Tensors and build dataset """
+        all_input_ids = torch.tensor([f.input_ids for f in features], dtype=torch.long)
+        all_input_mask = torch.tensor(
+            [f.input_mask for f in features], dtype=torch.long
+        )
+        all_label_ids = torch.tensor([f.label_id for f in features], dtype=torch.long)
+
+        return TensorDataset(
+            all_input_ids, all_input_mask, all_label_ids
+        )
+
+    # @staticmethod
     def add_specific_args(
         parser: argparse.ArgumentParser, root_dir: str
     ) -> argparse.ArgumentParser:

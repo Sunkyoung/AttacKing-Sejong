@@ -11,7 +11,7 @@ def get_important_scores(
     target_features,
     tgt_model,
     current_prob,
-    orig_label,
+    pred_label,
     pred_logit,
     batch_size,
 ):
@@ -35,10 +35,10 @@ def get_important_scores(
         (
             current_prob
             - leave_1_probs[
-                :, orig_label
+                :, pred_label
             ]  # Difference between original logit output and 1 masked logit output
             + (  # Add score which In case the results change.
-                leave_1_probs_argmax != orig_label
+                leave_1_probs_argmax != pred_label
             ).float()
             * (
                 leave_1_probs.max(dim=-1)[0]
@@ -182,21 +182,24 @@ def get_substitues(substitutes, substitutes_score=None, threshold=3.0):
 
 def run_attack(args, processor, example, feature, pretrained_model, finetuned_model):
     output = OutputFeatures(label_id=example.label, first_seq=example.first_seq)
-    input_tensor = processor.get_tensor(feature.input_ids).to('cuda')
-    input_mask_tensor = processor.get_tensor(feature.input_mask).to('cuda')
+    input_tensor = processor.get_tensor(feature.input_ids).unsqueeze(0).to('cuda')
+    input_mask_tensor = processor.get_tensor(feature.input_mask).unsqueeze(0).to('cuda')
+    # print(input_tensor.shape)
     with torch.no_grad():
         logit = finetuned_model(
             input_tensor, token_type_ids=None, attention_mask=input_mask_tensor
-        )[0]
+        )
         word_predictions = pretrained_model(input_tensor)[0].detach()
 
-    pred_logit = logit.detach()  # orig prob -> pred logit 으로 변경
+    pred_logit = logit[0]
+    pred_logit = pred_logit.detach().cpu()  # orig prob -> pred logit 으로 변경
     pred_label = torch.argmax(
         pred_logit, dim=1
     ).flatten()  # orig label -> pred label 으로 변경
+    orig_label = torch.argmax(torch.tensor(feature.label_id))
     current_prob = pred_logit.max()
 
-    if pred_label != feature.label_id:
+    if pred_label != orig_label:
         output.success_indication = "Predict fail"
         return output
 
@@ -251,7 +254,7 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
     return output
 
 
-@staticmethod
+# @staticmethod
 def add_specific_args(
     parser: argparse.ArgumentParser, root_dir: str
 ) -> argparse.ArgumentParser:
