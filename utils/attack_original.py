@@ -239,7 +239,7 @@ def get_substitues(substitutes, tokenizer, mlm_model, use_bpe, substitutes_score
             return words 
     return words 
 
-def get_bpe_substitues(substitutes, tokenizer, mlm_model):
+def get_bpe_substitutes(substitutes, tokenizer, mlm_model):
     # substitutes L, k
 
     substitutes = substitutes[0:12, 0:4] # (maximun subwords number, maximun subtitutes)
