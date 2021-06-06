@@ -218,7 +218,7 @@ def replacement_using_BERT(feature,
     return  
 
 
-def get_substitues(substitutes, substitutes_score=None, threshold=3.0):
+def get_substitues(substitutes, tokenizer, mlm_model, use_bpe, substitutes_score=None, threshold=3.0):
     # substitues L,k
     words = []
     sub_len, k = substitutes.size() #sub_len : # of subwords
@@ -226,12 +226,69 @@ def get_substitues(substitutes, substitutes_score=None, threshold=3.0):
     if sub_len == 0:
         return words
     # Single word, choose word which score of substitutes is higher than threshold   
-    for (substitute , I_score) in zip(substitutes[0], substitutes_score[0]):
-        if threshold != 0 and I_score < threshold:
-            break
-        words.append(substitute)
+    elif sub_len == 1:
+        for (substitute , I_score) in zip(substitutes[0], substitutes_score[0]):
+            if threshold != 0 and I_score < threshold:
+                break
+            words.append(tokenizer._convert_id_to_token(int(substitute)))
     # return the ids that I_score exceed the threshold
-    return words
+    else: 
+        if use_bpe == True :
+            words = get_bpe_substitutes(substitutes, tokenizer, mlm_model)
+        else:
+            return words 
+    return words 
+
+def get_bpe_substitues(substitutes, tokenizer, mlm_model):
+    # substitutes L, k
+
+    substitutes = substitutes[0:12, 0:4] # (maximun subwords number, maximun subtitutes)
+
+    # find all possible candidates 
+
+    all_substitutes = []
+    print('subsitutes')
+    print(substitutes)
+        
+    for i in range(substitutes.size(0)):
+        if len(all_substitutes) == 0:
+            lev_i = substitutes[i]
+            print('lev_i')
+            print(lev_i)
+            all_substitutes = [[int(c)] for c in lev_i]
+            print('all_substitutes')
+            print(all_substitutes)
+        else:
+            lev_i = []
+            for all_sub in all_substitutes:
+                for j in substitutes[i]:
+                    lev_i.append(all_sub + [int(j)])
+            all_substitutes = lev_i
+            print('######')
+            print(' alll')
+            print(all_substitutes)
+
+    # all substitutes  list of list of token-id (all candidates)
+    c_loss = nn.CrossEntropyLoss(reduction='none')
+    word_list = []
+    # all_substitutes = all_substitutes[:24]
+    all_substitutes = torch.tensor(all_substitutes) # [ N, L ]
+    all_substitutes = all_substitutes[:24].to('cuda')
+    ###????? why 24?
+    # print(substitutes.size(), all_substitutes.size())
+    N, L = all_substitutes.size()
+    word_predictions = mlm_model(all_substitutes)[0] # N L vocab-size
+    ppl = c_loss(word_predictions.view(N*L, -1), all_substitutes.view(-1)) # [ N*L ] 
+    ppl = torch.exp(torch.mean(ppl.view(N, L), dim=-1)) # N  
+    _, word_list = torch.sort(ppl)
+    word_list = [all_substitutes[i] for i in word_list]
+    final_words = []
+    for word in word_list:
+        tokens = [tokenizer._convert_id_to_token(int(i)) for i in word]
+        text = tokenizer.convert_tokens_to_string(tokens)
+        final_words.append(text)
+    return final_words
+
 
 def run_attack(args, processor, example, feature, pretrained_model, finetuned_model):
     output = OutputFeatures(label_id=example.label, first_seq=example.first_seq)
