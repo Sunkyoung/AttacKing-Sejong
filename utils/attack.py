@@ -1,5 +1,5 @@
 import argparse
-
+import numpy as np
 import torch
 from torch.utils.data import DataLoader, SequentialSampler
 
@@ -229,7 +229,6 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
     important_score = get_important_scores(
         processor,
         feature,
-        args,
         finetuned_model,
         current_prob,
         pred_label,
