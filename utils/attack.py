@@ -25,7 +25,7 @@ def get_important_scores(
     target_features,
     tgt_model,
     current_prob,
-    orig_label,
+    pred_label,
     pred_logit,
     batch_size,
 ):
@@ -49,10 +49,10 @@ def get_important_scores(
         (
             current_prob
             - leave_1_probs[
-                :, orig_label
+                :, pred_label
             ]  # Difference between original logit output and 1 masked logit output
             + (  # Add score which In case the results change.
-                leave_1_probs_argmax != orig_label
+                leave_1_probs_argmax != pred_label
             ).float()
             * (
                 leave_1_probs.max(dim=-1)[0]
@@ -65,6 +65,7 @@ def get_important_scores(
 
     return import_scores
 
+  
 def replacement_using_BERT(feature, current_prob, output,pred_label, word_index_with_I_score, processor, word_pred_idx, word_pred_scores_all, cos_mat = None, w2i ={},i2w={} ,threshold_pred_score = 3.0):
     
     final_words = copy.deepcopy(feature.input_ids) # tokenized word ids include CLS, SEP 
@@ -85,7 +86,7 @@ def replacement_using_BERT(feature, current_prob, output,pred_label, word_index_
         ############################
         if top_index > args.max_seq_length - 2:
             continue
-        ############################
+        ############
         
         substitutes = word_pred_idx[top_index].unsqueeze(0)  # L, k
         word_pred_scores = word_pred_scores_all[top_index].unsqueeze(0)
@@ -162,6 +163,7 @@ def replacement_using_BERT(feature, current_prob, output,pred_label, word_index_
 
         if most_gap > 0:
             output.num_changes += 1
+
             ####### ids_to_token & tokens_to_string######
             candidate_token = processor.tokenizer.convert_ids_to_token(candidate)
             tgt_word_token = processor.tokenizer.convert_ids_to_token(tgt_word)
@@ -209,9 +211,10 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
     pred_label = torch.argmax(
         pred_logit, dim=1
     ).flatten()  # orig label -> pred label 으로 변경
+    orig_label = torch.argmax(torch.tensor(feature.label_id))
     current_prob = pred_logit.max()
 
-    if pred_label != feature.label_id:
+    if pred_label != orig_label:
         output.success_indication = "Predict fail"
         return output
 
@@ -226,6 +229,7 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
     important_score = get_important_scores(
         processor,
         feature,
+        args,
         finetuned_model,
         current_prob,
         pred_label,
