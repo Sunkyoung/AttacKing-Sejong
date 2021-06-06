@@ -51,7 +51,7 @@ def get_important_scores(
 
     return import_scores
 
-def replacement_using_BERT(feature, current_prob, output,pred_label, word_index_with_I_score, processor, word_pred_idx, word_pred_scores_all, threshold_pred_score = 3.0):
+def replacement_using_BERT(feature, args, current_prob, output,pred_label, word_index_with_I_score, processor, word_pred_idx, word_pred_scores_all, threshold_pred_score = 3.0):
     
     final_words = copy.deepcopy(feature.input_ids) # tokenized word ids include CLS, SEP 
 
@@ -148,6 +148,7 @@ def replacement_using_BERT(feature, current_prob, output,pred_label, word_index_
 
         if most_gap > 0:
             output.num_changes += 1
+
             ####### ids_to_token & tokens_to_string######
             candidate_token = processor.tokenizer.convert_ids_to_token(candidate)
             tgt_word_token = processor.tokenizer.convert_ids_to_token(tgt_word)
@@ -210,6 +211,7 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
     important_score = get_important_scores(
         processor,
         feature,
+        args,
         finetuned_model,
         current_prob,
         pred_label,
