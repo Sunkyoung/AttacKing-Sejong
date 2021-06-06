@@ -1,13 +1,11 @@
 import argparse
 import json
 import os
+import torch
 
-from transformers import (AutoConfig, AutoModel, AutoModelForMaskedLM,
+from transformers import (AutoConfig, AutoModel, AutoModelForMaskedLM, AutoModelForSequenceClassification,
                           AutoTokenizer)
-
-
 from utils.dataprocessor import YnatProcessor
-
 
 def dump_features(features, output_dir):
     output_file = "attacked_result.json"
@@ -27,7 +25,7 @@ def dump_features(features, output_dir):
         )
     json.dump(
         outputs,
-        open(os.join.dir(output_dir, output_file), "w"),
+        open(os.path.join(output_dir, output_file), "w"),
         indent=4,
         ensure_ascii=False,
     )
@@ -65,13 +63,19 @@ def add_general_args(
         default=None,
         type=bool,
         required=True,
-        help="If True then use a bpe word for getting pair of subwords substitue"
+        help="If True then use a bpe word for getting pair of subwords substitute"
+    )
+    parser.add_argument(
+        "--finetuned-model-path",
+        type=str,
+        required=True,
+        help="Path of finetnued model",
     )
 
     return parser
 
 
-def main(args):
+def main():
     parser = argparse.ArgumentParser()
     parser = add_general_args(parser, os.getcwd())
     parser = YnatProcessor.add_specific_args(parser, os.getcwd())
@@ -98,12 +102,10 @@ def main(args):
     )
     pretrained_model.to("cuda")
 
-    finetuned_config = AutoConfig.from_pretrained(model_name, num_labels=num_labels)
-    finetuned_model = AutoModel.from_pretrained(model_name)
-    finetuned_model = AutoModelForMaskedLM.from_pretrained(
-        model_name, config=finetuned_config
-    )
+    finetuned_model = AutoModelForSequenceClassification.from_pretrained(model_name,num_labels=num_labels)
     finetuned_model.to("cuda")
+    model_state, _ = torch.load(args.finetuned_model_path)
+    finetuned_model.load_state_dict(model_state, strict=False)
 
     output_features = []
     for example, feature in zip(target_examples, target_features):
