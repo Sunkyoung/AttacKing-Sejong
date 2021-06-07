@@ -1,6 +1,7 @@
 import argparse
 import numpy as np
 import torch
+import copy
 from torch.utils.data import DataLoader, SequentialSampler
 
 from utils.dataprocessor import OutputFeatures
@@ -36,16 +37,16 @@ def get_important_scores(
     )
 
     leave_1_probs = []
-    
-    for batch in eval_dataloader:
-        masked_input = batch.to('cuda')
-        with torch.no_grad():
+    with torch.no_grad():
+        for batch in eval_dataloader:
+            masked_input = batch.to('cuda')
             # bs = masked_input.size(0)
             leave_1_prob_batch = tgt_model(masked_input)[0]  # B num-label
-        leave_1_probs.append(leave_1_prob_batch)
+            leave_1_probs.append(leave_1_prob_batch)
     leave_1_probs = torch.cat(leave_1_probs, dim=0)  # words, num-label
     leave_1_probs = torch.softmax(leave_1_probs, -1)  #
     leave_1_probs_argmax = torch.argmax(leave_1_probs, dim=-1)
+
     import_scores = (
         (
             current_prob
@@ -53,11 +54,11 @@ def get_important_scores(
                 :, pred_label
             ]  # Difference between original logit output and 1 masked logit output
             + (  # Add score which In case the results change.
-                leave_1_probs_argmax != pred_label
+                leave_1_probs_argmax != pred_label.to('cuda')
             ).float()
             * (
-                leave_1_probs.max(dim=-1)[0]
-                - torch.index_select(pred_logit, 0, leave_1_probs_argmax)
+                leave_1_probs.max(dim=-1)[0].to('cuda')
+                - torch.index_select(pred_logit.squeeze(0).to('cuda'), 0, leave_1_probs_argmax.to('cuda'))
             )
         )
         .data.cpu()
@@ -67,13 +68,15 @@ def get_important_scores(
     return import_scores
 
   
-def replacement_using_BERT(feature, current_prob, output,pred_label, word_index_with_I_score, processor, word_pred_idx, word_pred_scores_all, cos_mat = None, w2i ={},i2w={} ,threshold_pred_score = 3.0):
+def replacement_using_BERT(feature, current_prob, output,pred_label, word_index_with_I_score, processor, word_pred_idx, word_pred_scores_all, finetuned_model,cos_mat = None, w2i ={},i2w={} ,threshold_pred_score = 3.0):
+
     
     final_words = copy.deepcopy(feature.input_ids) # tokenized word ids include CLS, SEP 
 
     for top_index , important_score in word_index_with_I_score:
         # limit ratio of word change
-        if output.num_changes > int(args.change_ratio_limit * (len(final_words)-2)):
+        change_ratio_limit = 0.5
+        if output.num_changes > int(change_ratio_limit * (len(final_words)-2)):
             output.success_indication = 'exceed change ratio limit'  # exceed
             return output
 
@@ -85,7 +88,8 @@ def replacement_using_BERT(feature, current_prob, output,pred_label, word_index_
         ############################
         ##  Maybe useless ##########
         ############################
-        if top_index > args.max_seq_length - 2:
+        max_seq_length = 512
+        if top_index > max_seq_length - 2:
             continue
         ############
         
@@ -113,8 +117,8 @@ def replacement_using_BERT(feature, current_prob, output,pred_label, word_index_
             if '##' in substitute:
                 continue  # filter out sub-word
             '''
-            if substitute in filter_words:
-                continue
+            # if substitute in filter_words:
+            #     continue
             '''
             if substitute in w2i and tgt_word in w2i:
                 if cos_mat[w2i[substitute]][w2i[tgt_word]] < 0.4:
@@ -205,11 +209,9 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
         logit = finetuned_model(
             input_tensor, token_type_ids=None, attention_mask=input_mask_tensor
         )
-        
-        word_predictions = pretrained_model(input_tensor)[0].squeeze().detach()
+        word_predictions = pretrained_model(input_tensor)[0].detach()
 
     pred_logit = logit[0]
-    print(pred_logit)
     pred_logit = pred_logit.detach().cpu()  # orig prob -> pred logit 으로 변경
     pred_prob = torch.softmax(pred_logit, -1)
     pred_label = torch.argmax(
@@ -217,22 +219,20 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
     ).flatten()  # orig label -> pred label 으로 변경
     orig_label = torch.argmax(torch.tensor(feature.label_id))
     current_prob = pred_logit.max()
-    print(pred_label, orig_label)
+
     if pred_label != orig_label:
         output.success_indication = "Predict fail"
         return output
-        
+
     # word prediction은 MLM 모델에서 각 토큰 당 예측 값을 뽑음
+    word_predictions = word_predictions[1:-1, :]  # except  [CLS], [SEP]
     # Top-K 개를 뽑아서 가장 높은 스코어 순으로 정렬하며, 가장 plausible 한 예측값들의 모음
     # torch.return_types.topk(values=tensor([5., 4., 3.]), indices=tensor([4, 3, 2]))
     word_pred_scores_all, word_pred_idx = torch.topk(
         word_predictions, args.top_k, -1
-    )# seq-len k  #top k prediction
-    sep_position = feature.input_ids.index(processor.tokenizer.sep_token_id)
-    word_predictions = word_predictions[1:sep_position, :]
-    word_pred_scores_all = word_pred_scores_all[1:sep_position, :]
+    )  # seq-len k  #top k prediction
 
-    important_score = get_important_scores(
+    important_scores = get_important_scores(
         processor,
         feature,
         finetuned_model,
@@ -240,16 +240,19 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
         pred_label,
         pred_prob,
         args.batch_size,
+        
     )
 
     ##########################################
     # important_score 다음 프로세스 (TBD)#########
     ##########################################
     # legacy code
+    words, subwords, keys = processor.get_keys(example.first_seq)
     output.query_length += int(len(words))
     # sort by important score
+
     word_index_with_I_score= sorted(
-        enumerate(important_score), key=lambda x: x[1], reverse=True
+        enumerate(important_scores), key=lambda x: x[1], reverse=True
         )  # sort the important score and index
     # print(list_of_index)
     #=> [(59, 0.00014871359), (58, 0.00011396408), (60, 0.00010085106), .... ]      [(index, Importacne score), ....]
@@ -270,6 +273,7 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
                            processor, 
                            word_pred_idx, 
                            word_pred_scores_all,
+                           finetuned_model,
                            cos_mat,
                            w2i,
                            i2w, 
