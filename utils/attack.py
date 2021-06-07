@@ -6,6 +6,8 @@ from torch.utils.data import DataLoader, SequentialSampler
 
 from utils.dataprocessor import OutputFeatures
 
+filter_ids = [1, 18] #[UNK], .
+
 def get_sim_embed(embed_path, sim_path):
     id2word = {}
     word2id = {}
@@ -103,17 +105,16 @@ def replacement_using_BERT(feature, current_prob, output,pred_label, word_index_
         ################################
         most_gap = 0.0
         candidate = None
-
         for substitute in substitutes:
-            print(substitute)
+
             if substitute == tgt_word:
                 continue  # filter out original word
-            '''        
-            if '##' in substitute:
-                continue  # filter out sub-word
-            '''
-            # if substitute in filter_words:
-            #     continue
+      
+            # if '##' in processor.tokenizer.convert_ids_to_tokens(substitute.item()):
+            #     continue  # filter out sub-word
+
+            if substitute.item() in filter_ids :
+                continue
             '''
             if substitute in w2i and tgt_word in w2i:
                 if cos_mat[w2i[substitute]][w2i[tgt_word]] < 0.4:
@@ -153,7 +154,8 @@ def replacement_using_BERT(feature, current_prob, output,pred_label, word_index_
                 
                 return output
             else:
-                label_prob = temp_prob[pred_label]
+
+                label_prob = temp_prob.squeeze(0)[pred_label]
                 gap = current_prob - label_prob
                 if gap > most_gap:
                     most_gap = gap
@@ -252,15 +254,18 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
         )  # sort the important score and index
     # print(list_of_index)
     #=> [(59, 0.00014871359), (58, 0.00011396408), (60, 0.00010085106), .... ]      [(index, Importacne score), ....]
+    
 
-    print('loading sim-embed')
+    
     
     if args.use_sim_mat == 1:
+        print('loading sim-embed')
         cos_mat, w2i, i2w = get_sim_embed('data/target_data/counter-fitted-vectors.txt', 'data/target_data/cos_sim_counter_fitting.npy')
+        print('finish get-sim-embed')
     else:        
         cos_mat, w2i, i2w = None, {}, {}
 
-    print('finish get-sim-embed')
+    
 
     replacement_using_BERT(feature, 
                            current_prob, 
@@ -281,6 +286,7 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
         output.changes,
         output.query_length,
         output.success_indication,
+
     )
 
     return output
@@ -294,5 +300,5 @@ def add_specific_args(
     parser.add_argument("--top-k", default=32, type=int)
     parser.add_argument("--change_ratio_limit", default=0.5, type=float)
     parser.add_argument("--threshold-pred-score", default=0.1, type=float)
-    parser.add_argument("--use_sim_mat", type=int, help='whether use cosine_similarity to filter out atonyms')
+    parser.add_argument("--use_sim_mat", type=int, default = 0 ,help='whether use cosine_similarity to filter out atonyms')
     return parser
