@@ -229,7 +229,7 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
     word_pred_scores_all, word_pred_idx = torch.topk(
         word_predictions, args.top_k, -1
     )  # seq-len k  #top k prediction
-    word_predictions = word_pred_idx[1:sep_position, :] # except  [CLS], [SEP]
+    word_pred_idx = word_pred_idx[1:sep_position, :] # except  [CLS], [SEP]
     word_pred_scores_all = word_pred_scores_all[1:sep_position, :]
 
     important_scores = get_important_scores(
