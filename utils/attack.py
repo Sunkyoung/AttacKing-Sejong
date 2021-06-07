@@ -206,7 +206,7 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
             input_tensor, token_type_ids=None, attention_mask=input_mask_tensor
         )
         
-        word_predictions = pretrained_model(input_tensor)[0].detach()
+        word_predictions = pretrained_model(input_tensor)[0].squeeze().detach()
 
     pred_logit = logit[0]
     print(pred_logit)
@@ -221,14 +221,16 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
     if pred_label != orig_label:
         output.success_indication = "Predict fail"
         return output
-
+        
     # word prediction은 MLM 모델에서 각 토큰 당 예측 값을 뽑음
-    word_predictions = word_predictions[1:-1, :]  # except  [CLS], [SEP]
     # Top-K 개를 뽑아서 가장 높은 스코어 순으로 정렬하며, 가장 plausible 한 예측값들의 모음
     # torch.return_types.topk(values=tensor([5., 4., 3.]), indices=tensor([4, 3, 2]))
     word_pred_scores_all, word_pred_idx = torch.topk(
         word_predictions, args.top_k, -1
-    )  # seq-len k  #top k prediction
+    )# seq-len k  #top k prediction
+    sep_position = feature.input_ids.index(processor.tokenizer.sep_token_id)
+    word_predictions = word_predictions[1:sep_position, :]
+    word_pred_scores_all = word_pred_scores_all[1:sep_position, :]
 
     important_score = get_important_scores(
         processor,
