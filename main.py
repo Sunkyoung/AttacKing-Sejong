@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+import time
 import torch
 
 from transformers import (AutoConfig, AutoModel, AutoModelForMaskedLM, AutoModelForSequenceClassification,
@@ -19,7 +20,8 @@ def dump_features(features, output_dir):
                 "success_indication": feature.success_indication,
                 "target_sequence": feature.first_seq,
                 "num_tokens": len(feature.first_seq.split(" ")),
-                "label": feature.label_id,
+                "original_label": feature.label_id,
+                "change_label": feature.final_label if feature.final_label else feature.label_id ,
                 "query_length": feature.query_length,
                 "num_changes": feature.num_changes,
                 "changes": feature.changes,
@@ -34,6 +36,20 @@ def dump_features(features, output_dir):
     )
 
     print("Finished dump")
+
+def calculate_accuracy(features):
+    total = len(features)
+    cnt_pred_fail = 0
+    cnt_success = 0
+    for feature in features:
+        if feature.success_indication == "Predict fail":
+            cnt_pred_fail += 1
+        if feature.success_indication == "Attack success":
+            cnt_success += 1
+    orig_acc = (1 - cnt_pred_fail / total) * 100
+    attack_acc = orig_acc - (cnt_success / total * 100)
+    print(f'original accuarcy : {orig_acc}')
+    print(f'attacked accuarcy : {attack_acc}')
 
 
 def add_general_args(
@@ -99,6 +115,7 @@ def main():
     model_state, _ = torch.load(args.finetuned_model_path)
     finetuned_model.load_state_dict(model_state, strict=False)
 
+    start = time.time()
     output_features = []
     for example, feature in zip(target_examples, target_features):
         if args.run_BertAttack_original:
@@ -109,7 +126,8 @@ def main():
             args, processor, example, feature, pretrained_model, finetuned_model
         )
         output_features.append(output)
-
+    print('Total execution time : ', time.time()-start)
+    calculate_accuracy(output_features)
     dump_features(output_features, args.output_dir)
 
 
