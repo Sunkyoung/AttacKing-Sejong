@@ -36,12 +36,13 @@ def get_important_scores(
     )
 
     leave_1_probs = []
-    with torch.no_grad():
-        for batch in eval_dataloader:
-            masked_input = batch.to('cuda')
+    
+    for batch in eval_dataloader:
+        masked_input = batch.to('cuda')
+        with torch.no_grad():
             # bs = masked_input.size(0)
             leave_1_prob_batch = tgt_model(masked_input)[0]  # B num-label
-            leave_1_probs.append(leave_1_prob_batch)
+        leave_1_probs.append(leave_1_prob_batch)
     leave_1_probs = torch.cat(leave_1_probs, dim=0)  # words, num-label
     leave_1_probs = torch.softmax(leave_1_probs, -1)  #
     leave_1_probs_argmax = torch.argmax(leave_1_probs, dim=-1)
@@ -204,16 +205,18 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
         logit = finetuned_model(
             input_tensor, token_type_ids=None, attention_mask=input_mask_tensor
         )
+        
         word_predictions = pretrained_model(input_tensor)[0].detach()
 
     pred_logit = logit[0]
+    print(pred_logit)
     pred_logit = pred_logit.detach().cpu()  # orig prob -> pred logit 으로 변경
     pred_label = torch.argmax(
         pred_logit, dim=1
     ).flatten()  # orig label -> pred label 으로 변경
     orig_label = torch.argmax(torch.tensor(feature.label_id))
     current_prob = pred_logit.max()
-
+    print(pred_label, orig_label)
     if pred_label != orig_label:
         output.success_indication = "Predict fail"
         return output
@@ -243,7 +246,7 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
     output.query_length += int(len(words))
     # sort by important score
     word_index_with_I_score= sorted(
-        enumerate(important_scores), key=lambda x: x[1], reverse=True
+        enumerate(important_score), key=lambda x: x[1], reverse=True
         )  # sort the important score and index
     # print(list_of_index)
     #=> [(59, 0.00014871359), (58, 0.00011396408), (60, 0.00010085106), .... ]      [(index, Importacne score), ....]
