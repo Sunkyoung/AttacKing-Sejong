@@ -53,7 +53,7 @@ def get_important_scores(
         (
             current_prob
             - leave_1_probs[
-                :, pred_label
+                :, pred_label.squeeze(0)
             ]  # Difference between original logit output and 1 masked logit output
             + (  # Add score which In case the results change.
                 leave_1_probs_argmax != pred_label.to('cuda')
