@@ -1,10 +1,11 @@
 import argparse
-
+import torch.nn as nn
+import json
 import torch
-from torch.utils.data import DataLoader, SequentialSampler
-
+from torch.utils.data import DataLoader, SequentialSampler ,TensorDataset
+import copy
 from utils.dataprocessor import OutputFeatures
-
+import numpy as np
 def get_important_scores(
     words,
     tokenizer,
@@ -17,14 +18,14 @@ def get_important_scores(
     max_length
 ):
     masked_features = get_masked_by_token(words)
-    texts = [' '.join(words) for words in masked_words]
+    texts = [' '.join(words) for words in masked_features]
     all_input_ids = []
     all_masks = [] 
     all_segs = []
 
     for text in texts: 
         inputs = tokenizer.encode_plus(text, None, add_special_tokens=True, max_length=max_length, )
-        inputs_ids = inputs["input_ids"]
+        input_ids = inputs["input_ids"]
         token_type_ids = inputs["token_type_ids"]
         attention_mask = inputs["attention_mask"]
 
@@ -54,7 +55,7 @@ def get_important_scores(
     leave_1_probs = []
     with torch.no_grad():
         for batch in eval_dataloader:
-            masked_input = batch.to('cuda')
+            masked_input, = batch
             # bs = masked_input.size(0)
             leave_1_prob_batch = tgt_model(masked_input)[0]  # B num-label
             leave_1_probs.append(leave_1_prob_batch)
@@ -68,11 +69,11 @@ def get_important_scores(
                 :, orig_label
             ]  # Difference between original logit output and 1 masked logit output
             + (  # Add score which In case the results change.
-                leave_1_probs_argmax != orig_label
+                leave_1_probs_argmax != orig_label.to('cuda')
             ).float()
             * (
-                leave_1_probs.max(dim=-1)[0]
-                - torch.index_select(pred_logit, 0, leave_1_probs_argmax)
+                leave_1_probs.max(dim=-1)[0].to('cuda')
+                - torch.index_select(pred_logit.to('cuda'), 0, leave_1_probs_argmax.to('cuda'))
             )
         )
         .data.cpu()
@@ -81,7 +82,7 @@ def get_important_scores(
 
     return import_scores
 
-def get_masked_by_token(self, words):
+def get_masked_by_token(words):
     len_text = len(words)
     masked_words = [] 
     for i in range(len_text):
@@ -99,7 +100,8 @@ def replacement_using_BERT(feature,
                            word_index_with_I_score, 
                            tokenizer, 
                            word_pred_idx, 
-                           word_pred_scores_all, 
+                           word_pred_scores_all,
+                           finetuned_model, 
                            threshold_pred_score = 3.0):
     
     final_words = copy.deepcopy(words) # tokenized word ids include CLS, SEP 
@@ -130,11 +132,12 @@ def replacement_using_BERT(feature,
         ###############################
         ####  Can be depreciated  #####
         ###############################
+        
         substitutes = get_substitues(
             substitutes,
             tokenizer,
-            args.use_bpe,
             pretrained_model,
+            True,
             word_pred_scores,
             threshold_pred_score,
         )
@@ -147,13 +150,14 @@ def replacement_using_BERT(feature,
 
             if substitute == tgt_word:
                 continue  # filter out original word
-            '''        
+                    
             if '##' in substitute:
                 continue  # filter out sub-word
+            
             '''
             if substitute in filter_words:
                 continue
-            '''
+            
             if substitute in w2i and tgt_word in w2i:
                 if cos_mat[w2i[substitute]][w2i[tgt_word]] < 0.4:
                     continue
@@ -164,7 +168,7 @@ def replacement_using_BERT(feature,
             temp_replace[top_index] = substitute # replace token
             temp_text = tokenizer.convert_tokens_to_string(temp_replace)
             inputs = tokenizer.encode_plus(temp_text,None, add_special_tokens=True,max_length = args.max_seq_length,)
-            inputs_ids = torch.tensor(inputs["inputs_ids"]).unsqueeze(0).to('cuda')
+            input_ids = torch.tensor(inputs["input_ids"]).unsqueeze(0).to('cuda')
             seq_len = input_ids.size(1)
 
             
@@ -172,10 +176,10 @@ def replacement_using_BERT(feature,
             with torch.no_grad():       
                 logit = finetuned_model(input_ids)[0] 
             temp_logit= logit.detach() 
-            temp_prob = torch.softmax(temp_logit, -1) 
-            temp_label = torch.argmax(temp_logit, dim=1).flatten()  
+            temp_prob = torch.softmax(temp_logit, -1).squeeze(0) 
+            temp_label = torch.argmax(temp_logit, dim=1).flatten().squeeze(0)  
 
-            output.query_length += 1
+            output.num_changes += 1
 
             #Success
             if temp_label != pred_label:
@@ -196,7 +200,7 @@ def replacement_using_BERT(feature,
 
         if most_gap > 0:
             output.num_changes +=1
-            output.changes.append([keys[top_index][0], substitute, tgt_word])
+            output.changes.append([keys[top_index][0], candidate, tgt_word])
             current_prob = current_prob - most_gap
             final_words[top_index] = candidate
 
@@ -222,7 +226,7 @@ def get_substitues(substitutes, tokenizer, mlm_model, use_bpe, substitutes_score
             words.append(tokenizer._convert_id_to_token(int(substitute)))
     # return the ids that I_score exceed the threshold
     else: 
-        if use_bpe == True :
+        if  True :
             words = get_bpe_substitutes(substitutes, tokenizer, mlm_model)
         else:
             return words 
@@ -236,26 +240,26 @@ def get_bpe_substitutes(substitutes, tokenizer, mlm_model):
     # find all possible candidates 
 
     all_substitutes = []
-    print('subsitutes')
-    print(substitutes)
+    #print('subsitutes')
+    #print(substitutes)
         
     for i in range(substitutes.size(0)):
         if len(all_substitutes) == 0:
             lev_i = substitutes[i]
-            print('lev_i')
-            print(lev_i)
+            #print('lev_i')
+            #print(lev_i)
             all_substitutes = [[int(c)] for c in lev_i]
-            print('all_substitutes')
-            print(all_substitutes)
+            #print('all_substitutes')
+            #print(all_substitutes)
         else:
             lev_i = []
             for all_sub in all_substitutes:
                 for j in substitutes[i]:
                     lev_i.append(all_sub + [int(j)])
             all_substitutes = lev_i
-            print('######')
-            print(' alll')
-            print(all_substitutes)
+            #print('######')
+            #print(' alll')
+            #print(all_substitutes)
 
     # all substitutes  list of list of token-id (all candidates)
     c_loss = nn.CrossEntropyLoss(reduction='none')
@@ -284,21 +288,28 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
     input_tensor = processor.get_tensor(feature.input_ids).unsqueeze(0).to('cuda')
     input_mask_tensor = processor.get_tensor(feature.input_mask).unsqueeze(0).to('cuda')
 
-    words, sub_words, keys = processor.get_keys(example)
 
+    words, sub_words, keys = processor.get_keys(example.first_seq)
+    #print('example.first_seq', example.first_seq)
+    #print('words',words)
+    #print('sub_words', sub_words)
+    #print('keys', keys)
     with torch.no_grad():
         logit = finetuned_model(
             input_tensor, token_type_ids=None, attention_mask=input_mask_tensor
-        )[0]
-        word_predictions = pretrained_model(input_tensor)[0].detach()
+        )
+        word_predictions = pretrained_model(input_tensor)[0].squeeze().detach()
 
-    pred_logit = logit.detach()  # orig prob -> pred logit 으로 변경
+    pred_logit = logit[0]
+    pred_logit = pred_logit.detach().cpu()  # orig prob -> pred logit 으로 변경
+    pred_prob = torch.softmax(pred_logit, -1).squeeze(0)
     pred_label = torch.argmax(
         pred_logit, dim=1
-    ).flatten()  # orig label -> pred label 으로 변경
+    ).flatten().squeeze(0)  # orig label -> pred label 으로 변경
+    orig_label = torch.argmax(torch.tensor(feature.label_id))
     current_prob = pred_logit.max()
 
-    if pred_label != feature.label_id:
+    if pred_label != orig_label:
         output.success_indication = "Predict fail"
         return output
 
@@ -306,12 +317,14 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
     #sub_words = ['[CLS]'] + sub_words[:args.max_seq_length-2] + ['[SEP]']
 
     # word prediction은 MLM 모델에서 각 토큰 당 예측 값을 뽑음
-    word_predictions = word_predictions[1:-1, :]  # except  [CLS], [SEP]
+      # except  [CLS], [SEP]
     # Top-K 개를 뽑아서 가장 높은 스코어 순으로 정렬하며, 가장 plausible 한 예측값들의 모음
     # torch.return_types.topk(values=tensor([5., 4., 3.]), indices=tensor([4, 3, 2]))
     word_pred_scores_all, word_pred_idx = torch.topk(
         word_predictions, args.top_k, -1
     )  # seq-len k  #top k prediction
+    word_pred_idx = word_pred_idx[1:len(sub_words)+1, :]
+    word_pred_scores_all = word_pred_scores_all[1:len(sub_words)+1, :]
 
     important_score = get_important_scores(
         words,
@@ -320,9 +333,9 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
         finetuned_model,
         current_prob,
         pred_label,
-        pred_logit,
+        pred_prob,
         args.batch_size,
-        args.max_length
+        args.max_seq_length
     )
 
     ##########################################
@@ -332,7 +345,7 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
     output.query_length += int(len(words))
     # sort by important score
     word_index_with_I_score= sorted(
-        enumerate(important_scores), key=lambda x: x[1], reverse=True
+        enumerate(important_score), key=lambda x: x[1], reverse=True
         )  # sort the important score and index
     # print(list_of_index)
     #=> [(59, 0.00014871359), (58, 0.00011396408), (60, 0.00010085106), .... ]      [(index, Importacne score), ....]
@@ -348,7 +361,8 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
                            word_index_with_I_score, 
                            processor.tokenizer, 
                            word_pred_idx, 
-                           word_pred_scores_all, 
+                           word_pred_scores_all,
+                           finetuned_model, 
                            args.threshold_pred_score)
     
 
