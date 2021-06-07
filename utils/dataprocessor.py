@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+import copy
 from typing import List, Optional
 
 import torch
@@ -242,9 +243,10 @@ class YnatProcessor(DataProcessor):
     # @classmethod
     def _get_masked(self, feature: TensorDataset) -> TensorDataset:
         masked_inputs = []
-        for i in range(1, len(feature.input_ids)-1):
-            ids = feature.input_ids
-            masked_ids = ids[0:i]+[self.tokenizer.mask_token_id]+ids[i+1:]
+        sep_position = feature.input_ids.index(self.tokenizer.sep_token_id)
+        for i in range(1, sep_position):
+            masked_ids = copy.deepcopy(feature.input_ids)
+            masked_ids[i] = self.tokenizer.mask_token_id
             masked_inputs.append(masked_ids)
         return self._convert_to_tensordata(masked_inputs)
 
