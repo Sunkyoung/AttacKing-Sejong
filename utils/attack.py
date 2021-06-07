@@ -208,6 +208,7 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
 
     pred_logit = logit[0]
     pred_logit = pred_logit.detach().cpu()  # orig prob -> pred logit 으로 변경
+    pred_prob = torch.softmax(pred_logit, -1)
     pred_label = torch.argmax(
         pred_logit, dim=1
     ).flatten()  # orig label -> pred label 으로 변경
@@ -232,7 +233,7 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
         finetuned_model,
         current_prob,
         pred_label,
-        pred_logit,
+        pred_prob,
         args.batch_size,
     )
 
