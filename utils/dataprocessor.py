@@ -43,6 +43,7 @@ class OutputFeatures(object):
         self.first_seq = first_seq
         self.second_seq = second_seq
         self.final_text = None
+        self.final_label = None
         self.similarity = 0.0
         self.query_length = 0
         self.num_changes = 0
@@ -232,6 +233,9 @@ class YnatProcessor(DataProcessor):
             keys.append([start_idx, end_idx])
             start_idx = end_idx
         return words, all_subwords, keys
+
+    def get_label(self, label_id):
+        return self.get_labels()[label_id]
 
     def _create_examples(self, data):
         examples = []

@@ -132,11 +132,12 @@ def replacement_using_BERT(feature, current_prob, output,pred_label, word_index_
             temp_logit = logit[0].detach().cpu()
             temp_prob = torch.softmax(temp_logit, -1) 
             temp_label = torch.argmax(temp_logit, dim=1).flatten()  
-
+            
             output.query_length += 1
 
             #Success
             if temp_label != pred_label:
+                output.final_label = processor.get_label(temp_label)
                 output.num_changes += 1
               
                 ####### ids_to_token & tokens_to_string######
@@ -154,7 +155,6 @@ def replacement_using_BERT(feature, current_prob, output,pred_label, word_index_
                 
                 return output
             else:
-
                 label_prob = temp_prob.squeeze(0)[pred_label]
                 gap = current_prob - label_prob
                 if gap > most_gap:
