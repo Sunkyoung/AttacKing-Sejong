@@ -69,11 +69,9 @@ def get_important_scores(
 
   
 def replacement_using_BERT(feature, current_prob, output,pred_label, word_index_with_I_score, processor, word_pred_idx, word_pred_scores_all, finetuned_model,cos_mat = None, w2i ={},i2w={} ,threshold_pred_score = 3.0):
-
-    
     final_words = copy.deepcopy(feature.input_ids) # tokenized word ids include CLS, SEP 
 
-    for top_index , important_score in word_index_with_I_score:
+    for top_index, important_score in word_index_with_I_score:
         # limit ratio of word change
         change_ratio_limit = 0.5
         if output.num_changes > int(change_ratio_limit * (len(final_words)-2)):
@@ -209,7 +207,7 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
         logit = finetuned_model(
             input_tensor, token_type_ids=None, attention_mask=input_mask_tensor
         )
-        word_predictions = pretrained_model(input_tensor)[0].detach()
+        word_predictions = pretrained_model(input_tensor)[0].squeeze().detach()
 
     pred_logit = logit[0]
     pred_logit = pred_logit.detach().cpu()  # orig prob -> pred logit 으로 변경
@@ -224,13 +222,17 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
         output.success_indication = "Predict fail"
         return output
 
+    sep_position = feature.input_ids.index(processor.tokenizer.sep_token_id)
+
+    output.query_length += int(len(feature.input_ids[1:sep_position]))
     # word prediction은 MLM 모델에서 각 토큰 당 예측 값을 뽑음
-    word_predictions = word_predictions[1:-1, :]  # except  [CLS], [SEP]
     # Top-K 개를 뽑아서 가장 높은 스코어 순으로 정렬하며, 가장 plausible 한 예측값들의 모음
     # torch.return_types.topk(values=tensor([5., 4., 3.]), indices=tensor([4, 3, 2]))
     word_pred_scores_all, word_pred_idx = torch.topk(
         word_predictions, args.top_k, -1
     )  # seq-len k  #top k prediction
+    word_predictions = word_predictions[1:sep_position, :] # except  [CLS], [SEP]
+    word_pred_scores_all = word_pred_scores_all[1:sep_position, :]
 
     important_scores = get_important_scores(
         processor,
@@ -239,18 +241,16 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
         current_prob,
         pred_label,
         pred_prob,
-        args.batch_size,
-        
+        args.batch_size
     )
 
     ##########################################
     # important_score 다음 프로세스 (TBD)#########
     ##########################################
     # legacy code
-    words, subwords, keys = processor.get_keys(example.first_seq)
-    output.query_length += int(len(words))
+    # words, subwords, keys = processor.get_keys(example.first_seq)
+    
     # sort by important score
-
     word_index_with_I_score= sorted(
         enumerate(important_scores), key=lambda x: x[1], reverse=True
         )  # sort the important score and index
