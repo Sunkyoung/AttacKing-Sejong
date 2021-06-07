@@ -126,7 +126,6 @@ def replacement_using_BERT(feature, current_prob, output,pred_label, word_index_
             temp_replace[top_index+1] = substitute # replace token
 
             input_tensor = processor.get_tensor(temp_replace).unsqueeze(0).to('cuda')    
-
             with torch.no_grad():       
                 logit = finetuned_model(input_tensor)
             temp_logit = logit[0].detach().cpu()
@@ -134,7 +133,7 @@ def replacement_using_BERT(feature, current_prob, output,pred_label, word_index_
             temp_label = torch.argmax(temp_logit, dim=1).flatten()  
             
             output.query_length += 1
-
+            
             #Success
             if temp_label != pred_label:
                 output.final_label = processor.get_label(temp_label)
@@ -146,6 +145,7 @@ def replacement_using_BERT(feature, current_prob, output,pred_label, word_index_
                 tgt_word_token = processor.tokenizer.convert_ids_to_tokens([tgt_word])
                 output.changes.append([top_index, substitute_token, tgt_word_token])
                 #############################################
+                temp_replace = temp_replace[1:processor.get_sep_position(temp_replace)]
                 temp_replace_token = processor.tokenizer.convert_ids_to_tokens(temp_replace)
                 temp_text = processor.tokenizer.convert_tokens_to_string(temp_replace_token)
                 ##############################################
@@ -219,8 +219,7 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
         output.success_indication = "Predict fail"
         return output
 
-    sep_position = feature.input_ids.index(processor.tokenizer.sep_token_id)
-
+    sep_position = processor.get_sep_position(feature.input_ids)
     output.query_length += int(len(feature.input_ids[1:sep_position]))
 
     # word prediction은 MLM 모델에서 각 토큰 당 예측 값을 뽑음

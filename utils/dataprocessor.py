@@ -237,6 +237,9 @@ class YnatProcessor(DataProcessor):
     def get_label(self, label_id):
         return self.get_labels()[label_id]
 
+    def get_sep_position(self, input_ids):
+        return input_ids.index(self.tokenizer.sep_token_id)
+
     def _create_examples(self, data):
         examples = []
         for d in data:
