@@ -39,12 +39,13 @@ def get_important_scores(
     )
 
     leave_1_probs = []
-    with torch.no_grad():
-        for batch in eval_dataloader:
-            masked_input = batch.to('cuda')
-            # bs = masked_input.size(0)
+   
+    for batch in eval_dataloader:
+        masked_input = batch.to('cuda')
+        with torch.no_grad():
             leave_1_prob_batch = tgt_model(masked_input)[0]  # B num-label
-            leave_1_probs.append(leave_1_prob_batch)
+        leave_1_probs.append(leave_1_prob_batch)
+
     leave_1_probs = torch.cat(leave_1_probs, dim=0)  # words, num-label
     leave_1_probs = torch.softmax(leave_1_probs, -1)  #
     leave_1_probs_argmax = torch.argmax(leave_1_probs, dim=-1)
@@ -56,7 +57,7 @@ def get_important_scores(
                 :, pred_label.squeeze(0)
             ]  # Difference between original logit output and 1 masked logit output
             + (  # Add score which In case the results change.
-                leave_1_probs_argmax != pred_label.to('cuda')
+                leave_1_probs_argmax != pred_label.squeeze(0).to('cuda')
             ).float()
             * (
                 leave_1_probs.max(dim=-1)[0].to('cuda')
@@ -65,15 +66,15 @@ def get_important_scores(
         )
         .data.cpu()
     )
+
     return import_scores
 
   
-def replacement_using_BERT(feature, current_prob, output,pred_label, word_index_with_I_score, processor, word_pred_idx, word_pred_scores_all, finetuned_model,cos_mat = None, w2i ={},i2w={} ,threshold_pred_score = 3.0):
+def replacement_using_BERT(feature, current_prob, output, pred_label, word_index_with_I_score, processor, word_pred_idx, word_pred_scores_all, finetuned_model, change_ratio_limit, cos_mat = None, w2i ={},i2w={} ,threshold_pred_score = 3.0, ):
     final_words = copy.deepcopy(feature.input_ids) # tokenized word ids include CLS, SEP 
 
     for top_index, important_score in word_index_with_I_score:
         # limit ratio of word change
-        change_ratio_limit = 0.5
         if output.num_changes > int(change_ratio_limit * (len(final_words)-2)):
             output.success_indication = 'exceed change ratio limit'  # exceed
             return output
@@ -199,7 +200,7 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
     output = OutputFeatures(label_id=example.label, first_seq=example.first_seq)
     input_tensor = processor.get_tensor(feature.input_ids).unsqueeze(0).to('cuda')
     input_mask_tensor = processor.get_tensor(feature.input_mask).unsqueeze(0).to('cuda')
-    # print(input_tensor.shape)
+
     with torch.no_grad():
         logit = finetuned_model(
             input_tensor, token_type_ids=None, attention_mask=input_mask_tensor
@@ -274,19 +275,19 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
                            word_pred_idx, 
                            word_pred_scores_all,
                            finetuned_model,
+                           args.change_ratio_limit,
                            cos_mat,
                            w2i,
                            i2w, 
-                           args.threshold_pred_score)
+                           args.threshold_pred_score,
+                           )
     
-
-    print(
-        output.num_changes,
-        output.changes,
-        output.query_length,
-        output.success_indication,
-
-    )
+    # print(
+    #     output.num_changes,
+    #     output.changes,
+    #     output.query_length,
+    #     output.success_indication,
+    # )
 
     return output
 
