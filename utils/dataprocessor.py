@@ -228,8 +228,9 @@ class YnatProcessor(DataProcessor):
         keys = []
         start_idx = 0
         for word in words:
-            all_subwords.extend(self.tokenizer.tokenize(word))
-            end_idx = start_idx + len(all_subwords)
+            sub = self.tokenizer.tokenize(word)
+            all_subwords.extend(sub)
+            end_idx = start_idx + len(sub)
             keys.append([start_idx, end_idx])
             start_idx = end_idx
         return words, all_subwords, keys
