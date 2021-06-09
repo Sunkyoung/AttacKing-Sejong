@@ -179,7 +179,7 @@ def replacement_using_BERT(feature,
             temp_prob = torch.softmax(temp_logit, -1).squeeze(0) 
             temp_label = torch.argmax(temp_logit, dim=1).flatten().squeeze(0)  
 
-            output.num_changes += 1
+            output.query_length += 1
 
             #Success
             if temp_label != pred_label:
