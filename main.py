@@ -6,13 +6,13 @@ import torch
 
 from transformers import (AutoConfig, AutoModel, AutoModelForMaskedLM, AutoModelForSequenceClassification,
                           AutoTokenizer)
-from utils.dataprocessor import YnatProcessor
+from utils.dataprocessor import DataProcessor, YNATProcessor
 from utils import attack
 from utils.attack import run_attack
 from utils.attack_original import run_attack as original_run_attack 
 
 def dump_features(features, output_dir):
-    output_file = "attacked_result.json"
+    output_file = "attacked_result_counterfit_epoch2.json"
     outputs = []
     for feature in features:
         outputs.append(
@@ -93,13 +93,13 @@ def add_general_args(
 def main():
     parser = argparse.ArgumentParser()
     parser = add_general_args(parser, os.getcwd())
-    parser = YnatProcessor.add_specific_args(parser, os.getcwd())
+    parser = DataProcessor.add_specific_args(parser, os.getcwd())
     parser = attack.add_specific_args(parser, os.getcwd())
     args = parser.parse_args()        
 
     model_name = "klue/bert-base"
     tokenizer = AutoTokenizer.from_pretrained(model_name)
-    processor = YnatProcessor(args, tokenizer)
+    processor = YNATProcessor(args, tokenizer)
     target_examples = processor.get_dev_data(args.data_dir)
     target_features = processor.get_features(target_examples)
     num_labels = len(processor.get_labels())
