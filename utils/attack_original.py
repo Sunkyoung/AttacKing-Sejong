@@ -152,11 +152,10 @@ def replacement_using_BERT(feature,
         ####  Can be depreciated  #####
         ###############################
         
-        substitutes = get_substitues(
+        substitutes = get_substitutes(
             substitutes,
             tokenizer,
             pretrained_model,
-            True,
             word_pred_scores,
             threshold_pred_score,
         )
@@ -164,9 +163,7 @@ def replacement_using_BERT(feature,
         most_gap = 0.0
         candidate = None
 
-        for substitute_ in substitutes:
-            substitute = substitute_
-
+        for substitute in substitutes:
             if substitute == tgt_word:
                 continue  # filter out original word
                     
@@ -229,7 +226,7 @@ def replacement_using_BERT(feature,
     return  
 
 
-def get_substitues(substitutes, tokenizer, mlm_model, substitutes_score=None, threshold=3.0):
+def get_substitutes(substitutes, tokenizer, mlm_model, substitutes_score=None, threshold=3.0):
     # substitues L,k
     words = []
     sub_len, k = substitutes.size() #sub_len : # of subwords

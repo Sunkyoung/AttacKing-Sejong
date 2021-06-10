@@ -97,7 +97,7 @@ def replacement_using_BERT(feature, current_prob, output, pred_label, word_index
         ###############################
         ####  Can be depreciated  #####
         ###############################
-        substitutes = get_substitues(
+        substitutes = get_substitutes(
             substitutes,
             word_pred_scores,
             threshold_pred_score,
@@ -180,7 +180,7 @@ def replacement_using_BERT(feature, current_prob, output, pred_label, word_index
     return output
 
 
-def get_substitues(substitutes, substitutes_score=None, threshold=3.0):
+def get_substitutes(substitutes, substitutes_score=None, threshold=3.0):
     # substitues L,k
     words = []
     sub_len, k = substitutes.size() #sub_len : # of subwords
