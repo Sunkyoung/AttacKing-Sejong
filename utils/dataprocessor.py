@@ -28,13 +28,13 @@ class InputFeatures(object):
         self,
         input_ids: List[int],
         input_mask: List[int],
-        label_id: Optional[int] = None,
+        label_id: Optional[List[int]] = None,
         segment_ids: Optional[List[int]] = None,
     ):
         self.input_ids = input_ids
         self.input_mask = input_mask
-        self.segment_ids = segment_ids
         self.label_id = label_id
+        self.segment_ids = segment_ids
 
 
 class OutputFeatures(object):
@@ -216,7 +216,7 @@ class YnatProcessor(DataProcessor):
             self.get_labels(),
             self.args.max_seq_length,
             self.tokenizer,
-            self.args.do_whitespace_tokenize,
+            self.args.do_whitespace_tokenize
         )
 
     def get_tensor(self, feature) -> TensorDataset:
@@ -296,7 +296,7 @@ class YnatProcessor(DataProcessor):
             assert len(input_ids) == max_seq_length
             assert len(input_mask) == max_seq_length
 
-            label_id = [0.0] * len(label_list)
+            label_id = [0.] * len(label_list)
             label_id[label_map[example.label]] += 1
 
             features.append(
@@ -304,7 +304,7 @@ class YnatProcessor(DataProcessor):
                     input_ids=input_ids,
                     input_mask=input_mask,
                     label_id=label_id,
-                    segment_ids=None,
+                    segment_ids=None
                 )
             )
 
@@ -321,7 +321,7 @@ class YnatProcessor(DataProcessor):
         all_input_mask = torch.tensor(
             [f.input_mask for f in features], dtype=torch.long
         )
-        all_label_ids = torch.tensor([f.label_id for f in features], dtype=torch.long)
+        all_label_ids = torch.tensor([f.label_id for f in features], dtype=torch.float)
 
         return TensorDataset(
             all_input_ids, all_input_mask, all_label_ids
