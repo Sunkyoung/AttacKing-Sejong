@@ -137,7 +137,7 @@ def replacement_using_BERT(feature, current_prob, output, pred_label, word_index
             
             #Success
             if temp_label != pred_label:
-                output.final_label = processor.get_label(temp_label)
+                output.final_label = processor.get_label_name(temp_label)
                 output.num_changes += 1
               
                 ####### ids_to_token & tokens_to_string######
@@ -255,11 +255,9 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
         )  # sort the important score and index
     # print(list_of_index)
     #=> [(59, 0.00014871359), (58, 0.00011396408), (60, 0.00010085106), .... ]      [(index, Importacne score), ....]
-    
+
     if args.filter_antonym:
-        print('loading sim-embed')
-        cos_mat, w2i, i2w = get_sim_embed('data/target_data/counter-fitted-vectors.txt', 'data/target_data/cos_sim_counter_fitting.npy')
-        print('finish get-sim-embed')
+        cos_mat, w2i, i2w = get_sim_embed('data/counter_fitted_vector/counter_fitted_vectors.txt', 'data/counter_fitted_vector/cos_sim_counter_fitting.npy')
     else:        
         cos_mat, w2i, i2w = None, {}, {}
 
