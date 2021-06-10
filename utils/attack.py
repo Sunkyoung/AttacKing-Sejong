@@ -32,7 +32,7 @@ def get_important_scores(
     pred_logit,
     batch_size,
 ):
-    masked_features = processor._get_masked(target_features)
+    masked_features = processor.get_masked(target_features)
     eval_sampler = SequentialSampler(masked_features)
     eval_dataloader = DataLoader(
         masked_features, sampler=eval_sampler, batch_size=batch_size
@@ -70,7 +70,7 @@ def get_important_scores(
     return import_scores
 
   
-def replacement_using_BERT(feature, current_prob, output, pred_label, word_index_with_I_score, processor, word_pred_idx, word_pred_scores_all, finetuned_model, change_ratio_limit, cos_mat = None, w2i ={},i2w={} ,threshold_pred_score = 3.0, ):
+def replacement_using_BERT(feature, current_prob, output, pred_label, word_index_with_I_score, processor, word_pred_idx, word_pred_scores_all, finetuned_model, change_ratio_limit, cos_mat, w2i, i2w, threshold_pred_score):
     final_words = copy.deepcopy(feature.input_ids) # tokenized word ids include CLS, SEP 
 
     for top_index, important_score in word_index_with_I_score:
@@ -174,6 +174,7 @@ def replacement_using_BERT(feature, current_prob, output, pred_label, word_index
             current_prob = current_prob - most_gap
             final_words[top_index+1] = candidate
 
+    final_words = final_words[1:processor.get_sep_position(final_words)]
     final_words_token = processor.tokenizer.convert_ids_to_tokens(final_words)
     final_text = processor.tokenizer.convert_tokens_to_string(final_words_token)
     output.final_text = final_text
@@ -255,17 +256,12 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
     # print(list_of_index)
     #=> [(59, 0.00014871359), (58, 0.00011396408), (60, 0.00010085106), .... ]      [(index, Importacne score), ....]
     
-
-    
-    
-    if args.use_sim_mat == 1:
+    if args.filter_antonym:
         print('loading sim-embed')
         cos_mat, w2i, i2w = get_sim_embed('data/target_data/counter-fitted-vectors.txt', 'data/target_data/cos_sim_counter_fitting.npy')
         print('finish get-sim-embed')
     else:        
         cos_mat, w2i, i2w = None, {}, {}
-
-    
 
     replacement_using_BERT(feature, 
                            current_prob, 
@@ -297,8 +293,8 @@ def add_specific_args(
     parser: argparse.ArgumentParser, root_dir: str
 ) -> argparse.ArgumentParser:
     parser.add_argument("--batch-size", default=64, type=int)
-    parser.add_argument("--top-k", default=32, type=int)
+    parser.add_argument("--top-k", default=12, type=int)
     parser.add_argument("--change_ratio_limit", default=0.5, type=float)
-    parser.add_argument("--threshold-pred-score", default=0.1, type=float)
-    parser.add_argument("--use_sim_mat", type=int, default = 0 ,help='whether use cosine_similarity to filter out atonyms')
+    parser.add_argument("--threshold-pred-score", default=3.0, type=float)
+    parser.add_argument("--filter-antonym", action='store_true', help='whether use cosine_similarity to filter out antonyms')
     return parser
