@@ -209,7 +209,7 @@ class DataProcessor(object):
             else:
                 second_tokens.pop()
 
-    def _run_split_on_punc(text):
+    def _run_split_on_punc(self, text):
         """Splits punctuation on a piece of text."""
         def _is_punctuation(char):
             """Checks whether `chars` is a punctuation character."""
