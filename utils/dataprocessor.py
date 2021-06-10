@@ -75,7 +75,7 @@ class DataProcessor(object):
         )
 
     def get_tensor(self, feature) -> TensorDataset:
-        return self._convert_to_tensordata(feature)
+        return self.convert_to_tensordata(feature)
 
     def get_keys(self, sequence):
         words = sequence.strip().split()
@@ -90,7 +90,7 @@ class DataProcessor(object):
             start_idx = end_idx
         return words, all_subwords, keys
 
-    def get_label(self, label_id):
+    def get_label_name(self, label_id):
         return self.get_labels()[label_id]
 
     def get_sep_position(self, input_ids):
@@ -103,7 +103,7 @@ class DataProcessor(object):
             masked_ids = copy.deepcopy(feature.input_ids)
             masked_ids[i] = self.tokenizer.mask_token_id
             masked_inputs.append(masked_ids)
-        return self._convert_to_tensordata(masked_inputs)
+        return self.convert_to_tensordata(masked_inputs)
 
     def convert_to_tensordata(self, feature) -> torch.tensor:
         """ Convert to Tensors and build dataset """
