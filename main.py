@@ -11,8 +11,8 @@ from utils import attack
 from utils.attack import run_attack
 from utils.attack_original import run_attack as original_run_attack 
 
-def dump_features(features, output_dir):
-    output_file = "attacked_result_counterfit_epoch2.json"
+def dump_features(args, features, output_dir):
+    output_file = f"{args.output_file}.json"
     outputs = []
     for feature in features:
         outputs.append(
@@ -71,22 +71,23 @@ def add_general_args(
         help="The output directory where the model predictions and checkpoints will be written.",
     )
     parser.add_argument(
-        "--run-BertAttack-original",
-        action='store_true',
-        help="If True then Attack with white space wise otherwise Attack with subword wise",
+        "--output-file",
+        type=str,
+        required=True,
+        help="File name for output result",
     )
     parser.add_argument(
-        "--use-bpe",
+        "--run-wordwise-legacy",
         action='store_true',
-        help="If True then use a bpe word for getting pair of subwords substitute"
+        help="If True then Attack with white space wise otherwise Attack with subword wise",
     )
     parser.add_argument(
         "--finetuned-model-path",
         type=str,
         required=True,
-        help="Path of finetnued model",
+        help="Path for finetnued model",
     )
-
+    
     return parser
 
 
@@ -118,17 +119,18 @@ def main():
     start = time.time()
     output_features = []
     for example, feature in zip(target_examples, target_features):
-        if args.run_BertAttack_original:
+        if args.run_wordwise_legacy:
             output = original_run_attack(
                 args, processor, example, feature, pretrained_model, finetuned_model
             )
-        output = run_attack(
-            args, processor, example, feature, pretrained_model, finetuned_model
-        )
+        else:
+            output = run_attack(
+                args, processor, example, feature, pretrained_model, finetuned_model
+            )
         output_features.append(output)
     print('Total execution time : ', time.time()-start)
     calculate_accuracy(output_features)
-    dump_features(output_features, args.output_dir)
+    dump_features(args, output_features, args.output_dir)
 
 
 if __name__ == "__main__":
