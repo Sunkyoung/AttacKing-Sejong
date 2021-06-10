@@ -254,10 +254,10 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
     # print(list_of_index)
     #=> [(59, 0.00014871359), (58, 0.00011396408), (60, 0.00010085106), .... ]      [(index, Importacne score), ....]
 
-    if args.filter_antonym:
-        cos_mat, w2i, _ = get_sim_embed('data/counter_fitted_vector/counter_fitted_vectors.txt', 'data/counter_fitted_vector/cos_sim_counter_fitting.npy')
-    else:        
+    if args.no_counter_fitted_vector:
         cos_mat, w2i, _ = None, {}, {}
+    else:        
+        cos_mat, w2i, _ = get_sim_embed('data/counter_fitted_vector/counter_fitted_vectors.txt', 'data/counter_fitted_vector/cos_sim_counter_fitting.npy')
 
     replacement_using_BERT(feature, 
                            current_prob, 
@@ -291,5 +291,5 @@ def add_specific_args(
     parser.add_argument("--top-k", default=12, type=int)
     parser.add_argument("--change_ratio_limit", default=0.5, type=float)
     parser.add_argument("--threshold-pred-score", default=3.0, type=float)
-    parser.add_argument("--filter-antonym", action='store_true', help='whether use cosine_similarity to filter out antonyms')
+    parser.add_argument("--no-counter-fitted-vector", action='store_true', help='whether use cosine_similarity to filter out antonyms')
     return parser
