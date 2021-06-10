@@ -4,9 +4,9 @@ import os
 import time
 import torch
 
-from transformers import (AutoConfig, AutoModel, AutoModelForMaskedLM, AutoModelForSequenceClassification,
+from transformers import (AutoConfig, AutoModelForMaskedLM, AutoModelForSequenceClassification,
                           AutoTokenizer)
-from utils.dataprocessor import DataProcessor, YNATProcessor
+from utils.dataprocessor import DataProcessor, YNATProcessor, NSMCProcessor
 from utils import attack
 from utils.attack import run_attack
 from utils.attack_original import run_attack as original_run_attack 
@@ -57,7 +57,13 @@ def add_general_args(
 ) -> argparse.ArgumentParser:
     # Required parameters
     parser.add_argument(
-        "--data-dir",
+        "--dataset",
+        type=str,
+        required=True,
+        help="Target ataset name",
+    )
+    parser.add_argument(
+        "--input-dir",
         default=None,
         type=str,
         required=True,
@@ -77,15 +83,15 @@ def add_general_args(
         help="File name for output result",
     )
     parser.add_argument(
-        "--run-wordwise-legacy",
-        action='store_true',
-        help="If True then Attack with white space wise otherwise Attack with subword wise",
-    )
-    parser.add_argument(
         "--finetuned-model-path",
         type=str,
         required=True,
         help="Path for finetnued model",
+    )
+    parser.add_argument(
+        "--run-wordwise-legacy",
+        action='store_true',
+        help="If True then Attack with white space wise otherwise Attack with subword wise",
     )
     
     return parser
@@ -100,8 +106,11 @@ def main():
 
     model_name = "klue/bert-base"
     tokenizer = AutoTokenizer.from_pretrained(model_name)
-    processor = YNATProcessor(args, tokenizer)
-    target_examples = processor.get_dev_data(args.data_dir)
+    if args.dataset == "NSMC" or args.dataset == "nsmc":
+        processor = NSMCProcessor(args, tokenizer)
+    else:
+        processor = YNATProcessor(args, tokenizer)
+    target_examples = processor.get_dev_data(args.input_dir)
     target_features = processor.get_features(target_examples)
     num_labels = len(processor.get_labels())
 
