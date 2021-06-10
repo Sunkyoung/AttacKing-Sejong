@@ -1,2 +1,0 @@
-data/counter_fitted_vector/cos_sim_counter_fitting.npy filter=lfs diff=lfs merge=lfs -text
-data/counter_fitted_vector/counter_fitted_vectors.txt filter=lfs diff=lfs merge=lfs -text
