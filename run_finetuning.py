@@ -12,7 +12,7 @@ from torch.utils.data import (DataLoader, RandomSampler, SequentialSampler)
 from transformers import (AdamW, AutoModelForSequenceClassification,
                           AutoTokenizer, get_linear_schedule_with_warmup)
 
-from utils.dataprocessor import YnatProcessor
+from utils.dataprocessor import DataProcessor, YNATProcessor, NSMCProcessor
 
 
 def flat_accuracy(preds, labels):
@@ -74,10 +74,6 @@ def train(model, train_dataloader, optimizer, scheduler, device):
 
 
 def validation(model, eval_dataloader, device):
-    # ========================================
-    #               Validation
-    # ========================================
-
     print("")
     print("Running Validation...")
 
@@ -130,7 +126,11 @@ def run(args):
     model_name = "klue/bert-base"
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-    processor = YnatProcessor(args, tokenizer)
+    if args.dataset == "NSMC" or args.dataset == "nsmc":
+        processor = NSMCProcessor(args, tokenizer)
+    else:
+        processor = YNATProcessor(args, tokenizer)
+    
     label_list = list(processor.get_labels())
 
     train_examples = processor.get_train_data(args.data_dir)
@@ -179,7 +179,7 @@ def run(args):
 
         # save checkpoint for each epoch
         torch.save(
-            (model.state_dict(), optimizer.state_dict()), f"{args.output_dir}/model_klue-tc_{epoch+1}.pt"
+            (model.state_dict(), optimizer.state_dict()), f"{args.output_dir}/model_{args.dataset}_{epoch+1}.pt"
         )
 
 if __name__=="__main__":
@@ -210,6 +210,12 @@ if __name__=="__main__":
         type=int,
         help="The number of epochs for training",
     )
-    parser = YnatProcessor.add_specific_args(parser, os.getcwd())
+    parser.add_argument(
+        "--dataset",
+        default="YNAT",
+        type=str,
+         help="The number of epochs for training",
+    )
+    parser = DataProcessor.add_specific_args(parser, os.getcwd())
     args = parser.parse_args()
     run(args)
