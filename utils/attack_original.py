@@ -6,6 +6,21 @@ from torch.utils.data import DataLoader, SequentialSampler ,TensorDataset
 import copy
 from utils.dataprocessor import OutputFeatures
 import numpy as np
+
+def get_sim_embed(embed_path, sim_path):
+    id2word = {}
+    word2id = {}
+
+    with open(embed_path, 'r', encoding='utf-8') as ifile:
+        for line in ifile:
+            word = line.split()[0]
+            if word not in id2word:
+                id2word[len(id2word)] = word
+                word2id[word] = len(id2word) - 1
+
+    cos_sim = np.load(sim_path)
+    return cos_sim, word2id, id2word
+
 def get_important_scores(
     words,
     tokenizer,
@@ -102,6 +117,8 @@ def replacement_using_BERT(feature,
                            word_pred_idx, 
                            word_pred_scores_all,
                            finetuned_model, 
+                           cos_mat,
+                           w2i,
                            threshold_pred_score = 3.0):
     
     final_words = copy.deepcopy(words) # tokenized word ids include CLS, SEP 
@@ -157,11 +174,11 @@ def replacement_using_BERT(feature,
             '''
             if substitute in filter_words:
                 continue
-            
+            '''
             if substitute in w2i and tgt_word in w2i:
                 if cos_mat[w2i[substitute]][w2i[tgt_word]] < 0.4:
                     continue
-            '''
+            
 
             #Replace word and check whether the attack is successful
             temp_replace = final_words
@@ -211,7 +228,7 @@ def replacement_using_BERT(feature,
     return  
 
 
-def get_substitues(substitutes, tokenizer, mlm_model, use_bpe, substitutes_score=None, threshold=3.0):
+def get_substitues(substitutes, tokenizer, mlm_model, substitutes_score=None, threshold=3.0):
     # substitues L,k
     words = []
     sub_len, k = substitutes.size() #sub_len : # of subwords
@@ -349,6 +366,11 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
     # print(list_of_index)
     #=> [(59, 0.00014871359), (58, 0.00011396408), (60, 0.00010085106), .... ]      [(index, Importacne score), ....]
     
+    if args.filter_antonym:
+        cos_mat, w2i, i2w = get_sim_embed('data/counter_fitted_vector/counter_fitted_vectors.txt', 'data/counter_fitted_vector/cos_sim_counter_fitting.npy')
+    else:        
+        cos_mat, w2i, i2w = None, {}, {}
+
     replacement_using_BERT(feature,
                            words,
                            keys,
@@ -361,7 +383,10 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
                            processor.tokenizer, 
                            word_pred_idx, 
                            word_pred_scores_all,
-                           finetuned_model, 
+                           finetuned_model,
+                           cos_mat,
+                           w2i,
+                           i2w, 
                            args.threshold_pred_score)
     
 

@@ -22,7 +22,6 @@ def get_sim_embed(embed_path, sim_path):
     cos_sim = np.load(sim_path)
     return cos_sim, word2id, id2word
 
-
 def get_important_scores(
     processor,
     target_features,
@@ -70,7 +69,7 @@ def get_important_scores(
     return import_scores
 
   
-def replacement_using_BERT(feature, current_prob, output, pred_label, word_index_with_I_score, processor, word_pred_idx, word_pred_scores_all, finetuned_model, change_ratio_limit, cos_mat, w2i, i2w, threshold_pred_score):
+def replacement_using_BERT(feature, current_prob, output, pred_label, word_index_with_I_score, processor, word_pred_idx, word_pred_scores_all, finetuned_model, change_ratio_limit, cos_mat, w2i, threshold_pred_score):
     final_words = copy.deepcopy(feature.input_ids) # tokenized word ids include CLS, SEP 
 
     for top_index, important_score in word_index_with_I_score:
@@ -116,11 +115,10 @@ def replacement_using_BERT(feature, current_prob, output, pred_label, word_index
 
             if substitute.item() in filter_ids :
                 continue
-            '''
+
             if substitute in w2i and tgt_word in w2i:
                 if cos_mat[w2i[substitute]][w2i[tgt_word]] < 0.4:
                     continue
-            '''
 
             #Replace word and check whether the attack is successful
             temp_replace = final_words
@@ -257,9 +255,9 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
     #=> [(59, 0.00014871359), (58, 0.00011396408), (60, 0.00010085106), .... ]      [(index, Importacne score), ....]
 
     if args.filter_antonym:
-        cos_mat, w2i, i2w = get_sim_embed('data/counter_fitted_vector/counter_fitted_vectors.txt', 'data/counter_fitted_vector/cos_sim_counter_fitting.npy')
+        cos_mat, w2i, _ = get_sim_embed('data/counter_fitted_vector/counter_fitted_vectors.txt', 'data/counter_fitted_vector/cos_sim_counter_fitting.npy')
     else:        
-        cos_mat, w2i, i2w = None, {}, {}
+        cos_mat, w2i, _ = None, {}, {}
 
     replacement_using_BERT(feature, 
                            current_prob, 
@@ -272,7 +270,6 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
                            args.change_ratio_limit,
                            cos_mat,
                            w2i,
-                           i2w, 
                            args.threshold_pred_score,
                            )
     
