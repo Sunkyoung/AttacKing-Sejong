@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 import copy
+import unicodedata
 from typing import List, Optional
 
 import torch
@@ -70,15 +71,14 @@ class DataProcessor(object):
             examples,
             self.get_labels(),
             self.args.max_seq_length,
-            self.tokenizer,
-            self.args.do_whitespace_tokenize
+            self.tokenizer
         )
 
     def get_tensor(self, feature) -> TensorDataset:
         return self.convert_to_tensordata(feature)
 
     def get_keys(self, sequence):
-        words = sequence.strip().split()
+        words = " ".join(self._run_split_on_punc(sequence)).split()
         all_subwords = []
         keys = []
         start_idx = 0
@@ -134,7 +134,6 @@ class DataProcessor(object):
                 data.append([rd.strip() for rd in raw_data])
             return data
 
-
     def _read_json(cls, input_file: str):
         """Reads a tab separated value file."""
         with open(input_file, "r") as f:
@@ -149,8 +148,7 @@ class DataProcessor(object):
         examples: List[InputExample],
         label_list: List[str],
         max_seq_length: int,
-        tokenizer,
-        do_whitespace_tokenize,
+        tokenizer
     ) -> TensorDataset:
 
         """Loads a data file into a list of `InputBatch`s."""
@@ -158,12 +156,8 @@ class DataProcessor(object):
         label_map = {label: i for i, label in enumerate(label_list)}
 
         for example in examples:
-            if do_whitespace_tokenize:
-                first_tokens = example.first_seq.strip().split()
-                second_tokens = example.second_seq.strip().split()
-            else:
-                first_tokens = tokenizer.tokenize(example.first_seq)
-                second_tokens = tokenizer.tokenize(example.second_seq)
+            first_tokens = tokenizer.tokenize(example.first_seq)
+            second_tokens = tokenizer.tokenize(example.second_seq)
 
             # Account for [CLS], [SEP], [SEP] with "- 3"
             self._truncate_seq_pair(first_tokens, second_tokens, max_seq_length - 3)
@@ -215,6 +209,32 @@ class DataProcessor(object):
             else:
                 second_tokens.pop()
 
+    def _run_split_on_punc(text):
+        """Splits punctuation on a piece of text."""
+        def _is_punctuation(char):
+            """Checks whether `chars` is a punctuation character."""
+            cat = unicodedata.category(char)
+            if cat.startswith("P"):
+                return True
+            return False
+            
+        chars = list(text)
+        i = 0
+        start_new_word = True
+        output = []
+        while i < len(chars):
+            char = chars[i]
+            if _is_punctuation(char):
+                output.append([char])
+                start_new_word = True
+            else:
+                if start_new_word:
+                    output.append([])
+                start_new_word = False
+                output[-1].append(char)
+            i += 1
+        return ["".join(x) for x in output]
+    
     def add_specific_args(
             parser: argparse.ArgumentParser, root_dir: str
         ) -> argparse.ArgumentParser:
@@ -225,8 +245,6 @@ class DataProcessor(object):
                 help="The maximum total input sequence length after WordPiece tokenization. Sequences "
                 "longer than this will be truncated, and sequences shorter than this will be padded.",
             )
-            parser.add_argument("--do-whitespace-tokenize", action="store_true")
-
             return parser
 
 class NSMCProcessor(DataProcessor):
@@ -273,18 +291,15 @@ class NSMCProcessor(DataProcessor):
         examples: List[InputExample],
         label_list: List[str],
         max_seq_length: int,
-        tokenizer,
-        do_whitespace_tokenize,
+        tokenizer
     ) -> TensorDataset:
 
         """Loads a data file into a list of `InputBatch`s."""
         features = []
         label_map = {label: i for i, label in enumerate(label_list)}
         for example in examples:
-            if do_whitespace_tokenize:
-                first_tokens = example.first_seq.strip().split()
-            else:  # white space 기준 만으로 token화
-                first_tokens = tokenizer.tokenize(example.first_seq)
+
+            first_tokens = tokenizer.tokenize(example.first_seq)
 
             # Account for [CLS] and [SEP] with "- 2"
             if len(first_tokens) > max_seq_length - 2:
@@ -352,8 +367,7 @@ class YNATProcessor(DataProcessor):
         examples: List[InputExample],
         label_list: List[str],
         max_seq_length: int,
-        tokenizer,
-        do_whitespace_tokenize,
+        tokenizer
     ) -> TensorDataset:
 
         """Loads a data file into a list of `InputBatch`s."""
@@ -361,10 +375,7 @@ class YNATProcessor(DataProcessor):
         label_map = {label: i for i, label in enumerate(label_list)}
 
         for example in examples:
-            if do_whitespace_tokenize:
-                first_tokens = example.first_seq.strip().split()
-            else:  # white space 기준 만으로 token화
-                first_tokens = tokenizer.tokenize(example.first_seq)
+            first_tokens = tokenizer.tokenize(example.first_seq)
 
             # Account for [CLS] and [SEP] with "- 2"
             if len(first_tokens) > max_seq_length - 2:
