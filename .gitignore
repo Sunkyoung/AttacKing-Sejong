@@ -1,0 +1,11 @@
+utils/tokenization.py
+data/counter_fitted_vector/cos_sim_counter_fitting_nsmc.npy
+data/counter_fitted_vector/counter_fitted_vectors_nsmc.txt
+data/target_data/nsmc/
+export_csv.py
+finetuned_klue-bert-tc.pt
+finetuned_model_epoch1.pt
+finetuning_colab_ver.py
+output/
+utils/__pycache__/
+utils/modeling.py
