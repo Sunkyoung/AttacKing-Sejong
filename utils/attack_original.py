@@ -288,7 +288,6 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
     input_tensor = processor.get_tensor(feature.input_ids).unsqueeze(0).to('cuda')
     input_mask_tensor = processor.get_tensor(feature.input_mask).unsqueeze(0).to('cuda')
 
-
     words, sub_words, keys = processor.get_keys(example.first_seq)
     #print('example.first_seq', example.first_seq)
     #print('words',words)
