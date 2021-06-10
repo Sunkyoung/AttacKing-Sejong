@@ -7,6 +7,8 @@ import copy
 from utils.dataprocessor import OutputFeatures
 import numpy as np
 
+filter_words = ["[UNK]", "."] 
+
 def get_sim_embed(embed_path, sim_path):
     id2word = {}
     word2id = {}
@@ -171,10 +173,9 @@ def replacement_using_BERT(feature,
             if '##' in substitute:
                 continue  # filter out sub-word
             
-            '''
             if substitute in filter_words:
                 continue
-            '''
+
             if substitute in w2i and tgt_word in w2i:
                 if cos_mat[w2i[substitute]][w2i[tgt_word]] < 0.4:
                     continue
