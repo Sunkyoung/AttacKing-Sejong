@@ -57,12 +57,6 @@ def add_general_args(
 ) -> argparse.ArgumentParser:
     # Required parameters
     parser.add_argument(
-        "--dataset",
-        type=str,
-        required=True,
-        help="Target ataset name",
-    )
-    parser.add_argument(
         "--input-dir",
         default=None,
         type=str,
@@ -87,6 +81,12 @@ def add_general_args(
         type=str,
         required=True,
         help="Path for finetnued model",
+    )
+    parser.add_argument(
+        "--dataset",
+        default="YNAT",
+        type=str,
+        help="Target dataset name",
     )
     parser.add_argument(
         "--run-wordwise-legacy",
