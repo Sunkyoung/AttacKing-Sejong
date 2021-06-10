@@ -1,8 +1,10 @@
 # Finetuning script for YNAT(KLUE-TC) dataset
+import argparse
 import datetime
 import random
 import time
 import numpy as np
+import os
 
 import torch
 import torch.nn as nn
@@ -16,7 +18,6 @@ from utils.dataprocessor import YnatProcessor
 def flat_accuracy(preds, labels):
     pred_flat = np.argmax(preds, axis=1).flatten()
     labels_flat = np.argmax(labels, axis=1).flatten()
-
     return np.sum(pred_flat == labels_flat) / len(labels_flat)
 
 
@@ -43,9 +44,9 @@ def train(model, train_dataloader, optimizer, scheduler, device):
             )
 
         batch = tuple(t.to(device) for t in batch)
-
+        
         b_input_ids, b_input_mask, b_labels = batch
-
+        
         outputs = model(
             b_input_ids,
             token_type_ids=None,
@@ -72,7 +73,7 @@ def train(model, train_dataloader, optimizer, scheduler, device):
     return model, optimizer
 
 
-def validation(model, validation_dataloader, device):
+def validation(model, eval_dataloader, device):
     # ========================================
     #               Validation
     # ========================================
@@ -85,7 +86,7 @@ def validation(model, validation_dataloader, device):
     model.eval()
     eval_accuracy, nb_eval_steps = 0, 0
 
-    for batch in validation_dataloader:
+    for batch in eval_dataloader:
         batch = tuple(t.to(device) for t in batch)
 
         b_input_ids, b_input_mask, b_labels = batch
@@ -108,7 +109,7 @@ def validation(model, validation_dataloader, device):
     print("  Validation took: {:}".format(format_time(time.time() - t0)))
 
 
-def run():
+def run(args):
     # 재현을 위해 랜덤시드 고정
     seed_val = 42
     random.seed(seed_val)
@@ -124,23 +125,28 @@ def run():
         device = torch.device("cpu")
         print("No GPU available, using the CPU instead.")
 
-    config = {"batch_size": 4, "num_epochs": 5}
+    config = {"batch_size": args.batch_size, "num_epochs": args.num_epochs}
 
     model_name = "klue/bert-base"
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-    processor = YnatProcessor(tokenizer)
+    processor = YnatProcessor(args, tokenizer)
     label_list = list(processor.get_labels())
 
-    train_data = processor.get_train_data("data/target_data/ynat-v1")
-    validation_data = processor.get_dev_data("data/target_data/ynat-v1")
+    train_examples = processor.get_train_data(args.data_dir)
+    train_features = processor.get_features(train_examples)
+    train_data = processor.convert_to_all_tensordata(train_features)
+
+    eval_examples = processor.get_train_data(args.data_dir)
+    eval_features = processor.get_features(eval_examples)
+    eval_data = processor.convert_to_all_tensordata(eval_features)
 
     train_dataloader = DataLoader(
         train_data, sampler=RandomSampler(train_data), batch_size=config["batch_size"]
     )
-    validation_dataloader = DataLoader(
-        validation_data,
-        sampler=SequentialSampler(validation_data),
+    eval_dataloader = DataLoader(
+        eval_data,
+        sampler=SequentialSampler(eval_data),
         batch_size=config["batch_size"],
     )
 
@@ -148,7 +154,6 @@ def run():
         model_name, num_labels=len(label_list)
     )
     model.to(device)
-    model.zero_grad()  # 그래디언트 초기화
 
     total_steps = len(train_dataloader) * config["num_epochs"]
     print("total steps : ", total_steps)
@@ -157,6 +162,9 @@ def run():
     scheduler = get_linear_schedule_with_warmup(
         optimizer, num_warmup_steps=0, num_training_steps=total_steps
     )
+
+    # 그래디언트 초기화
+    model.zero_grad()
 
     # 에폭만큼 반복
     for epoch in range(config["num_epochs"]):
@@ -167,12 +175,41 @@ def run():
         print("Training...")
 
         model, optimizer = train(model, train_dataloader, optimizer, scheduler, device)
-        validation(model, validation_dataloader, device)
+        validation(model, eval_dataloader, device)
 
         # save checkpoint for each epoch
         torch.save(
-            (model.state_dict(), optimizer.state_dict()), f"./model_{epoch+1}.pt"
+            (model.state_dict(), optimizer.state_dict()), f"{args.output_dir}/model_klue-tc_{epoch+1}.pt"
         )
 
 if __name__=="__main__":
-    run()
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--data-dir",
+        default=None,
+        type=str,
+        required=True,
+        help="The input data path. Should contain the .json files (or other data files) for the task.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        default=None,
+        type=str,
+        required=True,
+        help="The output directory where the model predictions and checkpoints will be written.",
+    )
+    parser.add_argument(
+        "--batch-size",
+        default=32,
+        type=int,
+        help="Batch size for training",
+    )
+    parser.add_argument(
+        "--num-epochs",
+        default=5,
+        type=int,
+        help="The number of epochs for training",
+    )
+    parser = YnatProcessor.add_specific_args(parser, os.getcwd())
+    args = parser.parse_args()
+    run(args)
