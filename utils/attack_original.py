@@ -133,9 +133,8 @@ def replacement_using_BERT(feature,
 
         tgt_word = words[top_index] #because of CLS, need to +1 
 
-        #no filter words #####
-        #if tgt_word in filter_words:
-        #    continue
+        if tgt_word in filter_words:
+           continue
         ############################
         ##  need          ##########
         ############################
@@ -387,12 +386,12 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
                            args.threshold_pred_score)
     
 
-    print(
-        output.num_changes,
-        output.changes,
-        output.query_length,
-        output.success_indication,
-    )
+    # print(
+    #     output.num_changes,
+    #     output.changes,
+    #     output.query_length,
+    #     output.success_indication,
+    # )
 
     return output
 
