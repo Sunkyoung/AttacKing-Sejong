@@ -9,3 +9,4 @@ finetuned_model_epoch1.pt
 finetuning_colab_ver.py
 utils/__pycache__/
 utils/modeling.py
+output/
