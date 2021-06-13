@@ -401,7 +401,7 @@ def add_specific_args(
     parser: argparse.ArgumentParser, root_dir: str
 ) -> argparse.ArgumentParser:
     parser.add_argument("--batch-size", default=64, type=int)
-    parser.add_argument("--top-k", default=32, type=int)
+    parser.add_argument("--top-k", default=12, type=int)
     parser.add_argument("--change_ratio_limit", default=0.5, type=float)
     parser.add_argument("--threshold-pred-score", default=0.1, type=float)
     parser.add_argument("--no-counter-fitted-vector", action='store_true', help='whether use cosine_similarity to filter out antonyms')
