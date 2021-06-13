@@ -44,9 +44,10 @@ def get_important_scores(
         with torch.no_grad():
             leave_1_prob_batch = tgt_model(masked_input)[0]  # B num-label
         leave_1_probs.append(leave_1_prob_batch)
-
+    if not leave_1_probs:
+        return leave_1_probs
     leave_1_probs = torch.cat(leave_1_probs, dim=0)  # words, num-label
-    leave_1_probs = torch.softmax(leave_1_probs, -1)  #
+    leave_1_probs = torch.softmax(leave_1_probs, -1) 
     leave_1_probs_argmax = torch.argmax(leave_1_probs, dim=-1)
 
     import_scores = (
@@ -56,11 +57,11 @@ def get_important_scores(
                 :, pred_label.squeeze(0)
             ]  # Difference between original logit output and 1 masked logit output
             + (  # Add score which In case the results change.
-                leave_1_probs_argmax != pred_label.squeeze(0).to('cuda')
+                leave_1_probs_argmax != pred_label.to('cuda')
             ).float()
             * (
-                leave_1_probs.max(dim=-1)[0].to('cuda')
-                - torch.index_select(pred_logit.squeeze(0).to('cuda'), 0, leave_1_probs_argmax.to('cuda'))
+                leave_1_probs.max(dim=-1)[0]
+                - torch.index_select(pred_logit.squeeze(0).to('cuda'), 0, leave_1_probs_argmax.squeeze(0).to('cuda'))
             )
         )
         .data.cpu()
@@ -240,6 +241,10 @@ def run_attack(args, processor, example, feature, pretrained_model, finetuned_mo
         pred_prob,
         args.batch_size
     )
+    
+    if len(important_scores) == 0:
+        output.success_indication = 'null important score'
+        return output
 
     ##########################################
     # important_score 다음 프로세스 (TBD)#########
