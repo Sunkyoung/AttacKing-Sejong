@@ -2,26 +2,22 @@
 
 # CS475 Final Project (AttacKing Sejong)
 
-### Replication BERT-ATTACK (EMNLP 2019) in Korean [[PAPER]](https://arxiv.org/abs/2004.09984)
+### Replication BERT-ATTACK (EMNLP 2020) in Korean [[PAPER]](https://arxiv.org/abs/2004.09984)
 - The reason why our project name is 'AttacKing Sejong' 😂 
 - Model : KLUE-bert-base
-- Dataset : KLUE-TC (a.k.a YNAT) (+ Maybe NSMC, KLUE-NLI)
-
+- Dataset : KLUE-TC (a.k.a YNAT), NSMC (TBD: KLUE-NLI)
 <br>
 
-
-## Convention commits
-[Conventional Commits/Angular convention](https://github.com/angular/angular/blob/22b96b9/CONTRIBUTING.md#type)
-
-- build: Changes that affect the build system or external dependencies (example scopes: gulp, broccoli, npm)
-- ci: Changes to our CI configuration files and scripts (example scopes: Travis, Circle, BrowserStack, SauceLabs)
-- docs: Documentation only changes
-- feat: A new feature
-- fix: A bug fix
-- perf: A code change that improves performance
-- refactor: A code change that neither fixes a bug nor adds a feature
-- style: Changes that do not affect the meaning of the code (white-space, formatting, missing semi-colons, etc)
-- test: Adding missing tests or correcting existing tests
+## Scripts
+- KLUE-TC (YNAT)
+    ~~~
+    python main.py --dataset YNAT --input-dir data/target_data/ynat --output-dir output --finetuned-model-path output/target_model_YNAT.pt --output-file attacked_result_YNAT.json --counter-fitted-vector-txt data/counter_fitted_vector/counter_fitted_vectors_nsmc.txt --counter-fitted-vector-npy data/counter_fitted_vector/cos_sim_counter_fitting_ynat.npy
+    ~~~
+- NSMC
+    ~~~
+    python main.py --dataset NSMC --input-dir data/target_data/nsmc --output-dir output --finetuned-model-path output/target_model_NSMC.pt --output-file attacked_result_NSMC.json --counter-fitted-vector-txt data/counter_fitted_vector/counter_fitted_vectors_nsmc.txt --counter-fitted-vector-npy data/counter_fitted_vector/cos_sim_counter_fitting_nsmc.npy
+    ~~~
+- If you want to train in original method (word-wise attack), add argument `--run-wordwise-legacy`
 
 ## Dependencies
 - Python 3.8.5
