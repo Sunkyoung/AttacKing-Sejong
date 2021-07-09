@@ -34,11 +34,13 @@
     ~~~
 - If you want to train in original method (word-wise attack), add argument `--run-wordwise-legacy`
 <br>
+
 ## Dependencies
 - Python 3.8.5
 - PyTorch 1.7.1
 - transformers 4.6.1
 <br>
+
 ## References
 - [BERT-Attack](https://github.com/LinyangLee/BERT-Attack)
 - [NSMC (Naver Sentiment Movie Corpus)](https://github.com/e9t/nsmc)
