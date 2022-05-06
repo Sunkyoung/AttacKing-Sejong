@@ -1,8 +1,5 @@
 utils/tokenization.py
-data/counter_fitted_vector/cos_sim_counter_fitting_ynat.npy
-data/counter_fitted_vector/counter_fitted_vectors_ynat.txt
-data/counter_fitted_vector/cos_sim_counter_fitting_nsmc.npy
-data/counter_fitted_vector/counter_fitted_vectors_nsmc.txt
+data/counter_fitted_vector/
 export_csv.py
 finetuned_klue-bert-tc.pt
 finetuned_model_epoch1.pt

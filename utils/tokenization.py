@@ -178,7 +178,7 @@ class BasicTokenizer(object):
             output.append(char)
         return "".join(output)
 
-    def _run_split_on_punc(self, text):
+    def _run_split_on_punc(text):
         """Splits punctuation on a piece of text."""
         chars = list(text)
         i = 0
@@ -195,7 +195,6 @@ class BasicTokenizer(object):
                 start_new_word = False
                 output[-1].append(char)
             i += 1
-
         return ["".join(x) for x in output]
 
     def _tokenize_chinese_chars(self, text):
